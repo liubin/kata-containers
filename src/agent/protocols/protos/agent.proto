@@ -51,9 +51,10 @@ service AgentService {
 	rpc ListInterfaces(ListInterfacesRequest) returns(Interfaces);
 	rpc ListRoutes(ListRoutesRequest) returns (Routes);
 
-	// tracing
+	// observability
 	rpc StartTracing(StartTracingRequest) returns (google.protobuf.Empty);
 	rpc StopTracing(StopTracingRequest) returns (google.protobuf.Empty);
+	rpc GetMetrics(GetMetricsRequest) returns (Metrics);
 
 	// misc (TODO: some rpcs can be replaced by hyperstart-exec)
 	rpc CreateSandbox(CreateSandboxRequest) returns (google.protobuf.Empty);
@@ -497,4 +498,10 @@ message StartTracingRequest {
 }
 
 message StopTracingRequest {
+}
+
+message GetMetricsRequest {}
+
+message Metrics {
+	string metrics = 1;
 }

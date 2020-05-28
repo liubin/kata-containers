@@ -12,6 +12,7 @@
 extern crate lazy_static;
 extern crate oci;
 extern crate prctl;
+extern crate prometheus;
 extern crate protocols;
 extern crate regex;
 extern crate rustjail;
@@ -48,6 +49,7 @@ use unistd::Pid;
 mod config;
 mod device;
 mod linux_abi;
+mod metrics;
 mod mount;
 mod namespace;
 mod network;

@@ -55,6 +55,8 @@ type VC interface {
 	ListRoutes(ctx context.Context, sandboxID string) ([]*vcTypes.Route, error)
 
 	CleanupContainer(ctx context.Context, sandboxID, containerID string, force bool) error
+
+	UpdateRuntimeMetrics() error
 }
 
 // VCSandbox is the Sandbox interface
