@@ -98,6 +98,9 @@ type VCSandbox interface {
 	ListInterfaces() ([]*vcTypes.Interface, error)
 	UpdateRoutes(routes []*vcTypes.Route) ([]*vcTypes.Route, error)
 	ListRoutes() ([]*vcTypes.Route, error)
+
+	UpdateRuntimeMetrics() error
+	GetAgentMetrics() (string, error)
 }
 
 // VCContainer is the Container interface
