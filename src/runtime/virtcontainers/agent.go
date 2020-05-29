@@ -11,9 +11,9 @@ import (
 	"time"
 
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	"github.com/mitchellh/mapstructure"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"golang.org/x/net/context"
@@ -262,4 +262,7 @@ type agent interface {
 
 	// load data from disk
 	load(persistapi.AgentState)
+
+	// getAgentMetrics get metrics of agent and guest through agent
+	getAgentMetrics(*grpc.GetMetricsRequest) (*grpc.Metrics, error)
 }

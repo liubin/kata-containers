@@ -9,8 +9,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -241,3 +241,7 @@ func (n *noopAgent) save() (s persistapi.AgentState) {
 
 // load is the Noop agent state loader. It does nothing.
 func (n *noopAgent) load(s persistapi.AgentState) {}
+
+func (k *noopAgent) getAgentMetrics(req *grpc.GetMetricsRequest) (*grpc.Metrics, error) {
+	return nil, nil
+}

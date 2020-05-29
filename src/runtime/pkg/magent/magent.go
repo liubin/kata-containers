@@ -18,7 +18,7 @@ type MAgent struct {
 // NewMAgent create and return a new MAgent instance
 func NewMAgent(containerdAddr, containerdConfigFile string) (*MAgent, error) {
 	if containerdAddr == "" {
-		return nil, fmt.Errorf("Containerd serve address must be specified")
+		return nil, fmt.Errorf("Containerd serve address missing.")
 	}
 
 	containerdConf := &srvconfig.Config{

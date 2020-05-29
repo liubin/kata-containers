@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	mutils "github.com/kata-containers/runtime/pkg/utils"
+	mutils "github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	"github.com/sirupsen/logrus"
 
 	"github.com/containerd/containerd"
