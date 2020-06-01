@@ -29,6 +29,7 @@ import (
 
 const (
 	kataRuntimeName              = "io.containerd.kata.v2"
+	containerdRuntimeTaskPath    = "io.containerd.runtime.v2.task"
 	promNamespaceManagementAgent = "kata_magent"
 )
 
@@ -72,8 +73,10 @@ func init() {
 	prometheus.MustRegister(scrapeDurationsHistogram)
 }
 
+// getMetricsAddress get metrics address for a sandbox, the abscract unix socket address is saved
+// in `metrics_address` with the same place of `address`.
 func (ma *MAgent) getMetricsAddress(sandboxID, namespace string) (string, error) {
-	path := filepath.Join(ma.containerdStatePath, "io.containerd.runtime.v2.task", namespace, sandboxID, "metrics_address")
+	path := filepath.Join(ma.containerdStatePath, containerdRuntimeTaskPath, namespace, sandboxID, "metrics_address")
 
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -174,10 +177,11 @@ func (ma *MAgent) ProcessMetricsRequest(w http.ResponseWriter, r *http.Request) 
 		}
 	}()
 
-	// gather metrics collected for management agent
+	// gather metrics collected for management agent.
 	x := promhttp.Handler()
 	x.ServeHTTP(w, r)
 
+	// prepare writer for writing response.
 	contentType := expfmt.Negotiate(r.Header)
 	writer := io.Writer(w)
 	if mutils.GzipAccepted(r.Header) {
@@ -190,15 +194,19 @@ func (ma *MAgent) ProcessMetricsRequest(w http.ResponseWriter, r *http.Request) 
 		writer = gz
 	}
 
+	// create encoder to encode metrics.
 	encoder := expfmt.NewEncoder(writer, contentType)
 
+	// get all sandboxes
 	sandboxes, err = ma.getSandboxes()
 	if err != nil {
 		logrus.Errorf("failed to get sandboxes: %s", err.Error())
 	} else {
+		// save running kata pods as a metrics.
 		runningShimCount.Set(float64(len(sandboxes)))
-		for sandboxID, ns := range sandboxes {
-			if e := ma.aggrateSandboxMetrics(sandboxID, ns, w, r, encoder); e != nil {
+		for sandboxID, namespace := range sandboxes {
+			// aggrate one sandbox's metrics
+			if e := ma.aggrateSandboxMetrics(sandboxID, namespace, w, r, encoder); e != nil {
 				logrus.Errorf("failed to aggrate one sandbox's metrics: %s", e.Error())
 				err = e
 			}
@@ -216,11 +224,14 @@ func (ma *MAgent) getSandboxes() (map[string]string, error) {
 	defer client.Close()
 
 	ctx := context.Background()
+
+	// first all all namespaces.
 	namespaceList, err := client.NamespaceService().List(ctx)
 	if err != nil {
 		return nil, err
 	}
 
+	// map of type: <key:sandbox_id => value: namespace>
 	sandboxMap := make(map[string]string)
 
 	for _, namespace := range namespaceList {
@@ -231,6 +242,7 @@ func (ma *MAgent) getSandboxes() (map[string]string, error) {
 		initSandboxByNamespaceFunc := func(namespace string) error {
 			nsClient, _ := containerd.New(ma.containerdAddr, containerd.WithDefaultNamespace(namespace))
 			defer nsClient.Close()
+			// only listup kata contaienrs pods/containers
 			containers, err := nsClient.ContainerService().List(ctx, "runtime.name=="+kataRuntimeName)
 			if err != nil {
 				return err

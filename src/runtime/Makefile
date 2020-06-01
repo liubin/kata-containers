@@ -203,6 +203,11 @@ SHIMV2 = containerd-shim-kata-v2
 SHIMV2_OUTPUT = $(CURDIR)/$(SHIMV2)
 SHIMV2_DIR = $(CLI_DIR)/$(SHIMV2)
 
+MAGENT = kata-magent
+MAGENT_OUTPUT = $(CURDIR)/$(MAGENT)
+MAGENT_DIR = $(CLI_DIR)/magent
+
+
 SOURCES := $(shell find . 2>&1 | grep -E '.*\.(c|h|go)$$')
 VERSION := ${shell cat ./VERSION}
 
@@ -503,7 +508,7 @@ define SHOW_ARCH
   $(shell printf "\\t%s%s\\\n" "$(1)" $(if $(filter $(ARCH),$(1))," (default)",""))
 endef
 
-all: runtime containerd-shim-v2 netmon
+all: runtime containerd-shim-v2 netmon magent
 
 # Targets that depend on .git-commit can use $(shell cat .git-commit) to get a
 # git revision string.  They will only be rebuilt if the revision string
@@ -516,6 +521,8 @@ all: runtime containerd-shim-v2 netmon
 	@test -n "$$(git status --porcelain --untracked-files=no)" && echo -n "-dirty" >>$@ || true
 
 containerd-shim-v2: $(SHIMV2_OUTPUT)
+
+magent: $(MAGENT_OUTPUT)
 
 netmon: $(NETMON_TARGET_OUTPUT)
 
@@ -562,6 +569,9 @@ $(TARGET_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) | show-summary
 
 $(SHIMV2_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
 	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && go build $(KATA_LDFLAGS) $(BUILDFLAGS) -o $@ .)
+
+$(MAGENT_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
+	$(QUIET_BUILD)(cd $(MAGENT_DIR)/ && go build $(KATA_LDFLAGS) $(BUILDFLAGS) -o $@ .)
 
 .PHONY: \
 	check \
@@ -705,7 +715,7 @@ install-completions:
 	$(QUIET_INST)install --mode 0644 -D  $(BASH_COMPLETIONS) $(DESTDIR)/$(BASH_COMPLETIONSDIR)/$(notdir $(BASH_COMPLETIONS));
 
 clean:
-	$(QUIET_CLEAN)rm -f $(TARGET) $(SHIMV2) $(NETMON_TARGET) $(CONFIGS) $(GENERATED_FILES) .git-commit .git-commit.tmp
+	$(QUIET_CLEAN)rm -f $(TARGET) $(SHIMV2) $(MAGENT) $(NETMON_TARGET) $(CONFIGS) $(GENERATED_FILES) .git-commit .git-commit.tmp
 
 show-usage: show-header
 	@printf "• Overview:\n"
