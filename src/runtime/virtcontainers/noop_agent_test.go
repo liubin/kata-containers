@@ -28,12 +28,16 @@ func testCreateNoopContainer() (*Sandbox, *Container, error) {
 
 	contConfig := newTestContainerConfigNoop(contID)
 
-	p, c, err := CreateContainer(ctx, p.ID(), contConfig)
+	// p, c, err := CreateContainer(ctx, p.ID(), contConfig)
+	// if err != nil {
+	// 	return nil, nil, err
+	// }
+	s := p.(*Sandbox)
+	c, err := s.CreateContainer(contConfig)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	return p.(*Sandbox), c.(*Container), nil
+	return s, c.(*Container), nil
 }
 
 func TestNoopAgentInit(t *testing.T) {

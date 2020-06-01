@@ -27,7 +27,6 @@ import (
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/vcmock"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -229,7 +228,7 @@ func newTestHypervisorConfig(dir string, create bool) (vc.HypervisorConfig, erro
 }
 
 // newTestRuntimeConfig creates a new RuntimeConfig
-func newTestRuntimeConfig(dir, consolePath string, create bool) (oci.RuntimeConfig, error) {
+func newTestRuntimeConfig(dir string, create bool) (oci.RuntimeConfig, error) {
 	if dir == "" {
 		return oci.RuntimeConfig{}, errors.New("BUG: need directory")
 	}
@@ -245,7 +244,7 @@ func newTestRuntimeConfig(dir, consolePath string, create bool) (oci.RuntimeConf
 		AgentType:        vc.KataContainersAgent,
 		ProxyType:        vc.KataProxyType,
 		ShimType:         vc.KataShimType,
-		Console:          consolePath,
+		Console:          "",
 	}, nil
 }
 
@@ -1065,23 +1064,4 @@ func TestMainResetCLIGlobals(t *testing.T) {
 	assert.Equal(cli.AppHelpTemplate, savedCLIAppHelpTemplate)
 	assert.NotNil(cli.VersionPrinter)
 	assert.NotNil(savedCLIVersionPrinter)
-}
-
-func createTempContainerIDMapping(containerID, sandboxID string) (string, error) {
-	// Mocking rootless
-	rootless.IsRootless = func() bool { return false }
-
-	tmpDir, err := ioutil.TempDir("", "containers-mapping")
-	if err != nil {
-		return "", err
-	}
-	ctrsMapTreePath = tmpDir
-
-	path := filepath.Join(ctrsMapTreePath, containerID, sandboxID)
-	if err := os.MkdirAll(path, 0750); err != nil {
-		return "", err
-	}
-
-	katautils.SetCtrsMapTreePath(ctrsMapTreePath)
-	return tmpDir, nil
 }
