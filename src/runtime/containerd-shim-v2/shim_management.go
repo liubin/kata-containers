@@ -49,9 +49,10 @@ func (s *service) serveMetrics(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logrus.WithError(err).Error("failed GetAgentMetrics")
 		if isGRPCErrorCode(codes.Unimplemented, err) {
+			logrus.Warn("metrics API not supportted by this agent.")
 			isSupportAgentMetricsAPI = false
+			return
 		}
-		return
 	}
 
 	// decode agent metrics
@@ -94,17 +95,20 @@ func (s *service) startManagementServer(ctx context.Context) {
 		logrus.Errorf("failed to create socket address: %s", err.Error())
 		return
 	}
-	// write metrics address to filesystem
-	if err := cdshim.WriteAddress("metrics_address", metricsAddress); err != nil {
-		logrus.Errorf("failed to write metrics address: %s", err.Error())
-		return
-	}
 
 	listener, err := cdshim.NewSocket(metricsAddress)
 	if err != nil {
 		logrus.Errorf("failed to create listener: %s", err.Error())
 		return
 	}
+
+	// write metrics address to filesystem
+	if err := cdshim.WriteAddress("metrics_address", metricsAddress); err != nil {
+		logrus.Errorf("failed to write metrics address: %s", err.Error())
+		return
+	}
+
+	logrus.Info("magent inited")
 
 	// bind hanlder
 	http.HandleFunc("/metrics", s.serveMetrics)

@@ -58,7 +58,7 @@ lazy_static! {
     prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"netdev_stat").as_ref() , "Guest net devices stats.", &["interface","item"]).unwrap();
 
     static ref     DISKSTAT: GaugeVec =
-    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"diskstat").as_ref() , "Disks stat in system.", &["disk"]).unwrap();
+    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"diskstat").as_ref() , "Disks stat in system.", &["disk","item"]).unwrap();
 }
 
 pub fn get_metrics(_: &protocols::agent::GetMetricsRequest) -> Result<String> {
@@ -81,7 +81,16 @@ pub fn get_metrics(_: &protocols::agent::GetMetricsRequest) -> Result<String> {
 }
 
 fn update_agent_metrics() {
-    let me = procfs::process::Process::myself().unwrap();
+    let me = procfs::process::Process::myself();
+    match me {
+        Err(err) => {
+            error!(sl!(), "failed to create process instance: {:?}", err);
+            return;
+        }
+        Ok(_) => {}
+    }
+
+    let me = me.unwrap();
 
     let tps = procfs::ticks_per_second().unwrap();
 
