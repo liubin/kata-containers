@@ -7,7 +7,7 @@ import (
 	"github.com/prometheus/procfs"
 )
 
-const namespaceHypervisor = "hypervisor"
+const namespaceHypervisor = "kata_hypervisor"
 
 var (
 	hypervisorThreads = prometheus.NewGauge(prometheus.GaugeOpts{
