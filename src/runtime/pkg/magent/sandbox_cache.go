@@ -29,17 +29,17 @@ func (sc *sandboxCache) getAllSandboxes() map[string]string {
 	return sc.sandboxes
 }
 
-func (sc *sandboxCache) deleteIfExists(id string) bool {
+func (sc *sandboxCache) deleteIfExists(id string) (string, bool) {
 	sc.Lock()
 	defer sc.Unlock()
 
-	if _, found := sc.sandboxes[id]; found {
+	if val, found := sc.sandboxes[id]; found {
 		delete(sc.sandboxes, id)
-		return true
+		return val, true
 	}
 
 	// not in sandbox cache
-	return false
+	return "", false
 }
 
 func (sc *sandboxCache) putIfNotExists(id, value string) bool {
@@ -154,7 +154,7 @@ func (sc *sandboxCache) startEventsListener(addr string) error {
 				// if container in sandboxes list, it must be the pause container in the sandbox,
 				// so the contaienr id is the sandbox id
 				// we can simply delete the contaienrid from sandboxes list
-				deleted := sc.deleteIfExists(cd.ID)
+				_, deleted := sc.deleteIfExists(cd.ID)
 				logrus.Infof("delete sandbox from cache for: %s, result: %t", cd.ID, deleted)
 			} else {
 				logrus.Debugf("other events: Namespace: %s, Topic: %s, Event: %s", e.Namespace, e.Topic, string(eventBody))
