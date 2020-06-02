@@ -29,7 +29,7 @@ var (
 		Name:      "proc_status",
 		Help:      "katashim proc status.",
 	},
-		[]string{"mem_type"},
+		[]string{"item"},
 	)
 
 	katashimProcStat = prometheus.NewGaugeVec(prometheus.GaugeOpts{

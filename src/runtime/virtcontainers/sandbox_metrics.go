@@ -21,7 +21,7 @@ var (
 		Name:      "proc_status",
 		Help:      "Hypervisor proc status.",
 	},
-		[]string{"mem_type"},
+		[]string{"item"},
 	)
 
 	hypervisorProcStat = prometheus.NewGaugeVec(prometheus.GaugeOpts{

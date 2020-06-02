@@ -5,6 +5,7 @@ import (
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/containers"
+	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/typeurl"
 	"github.com/sirupsen/logrus"
 
@@ -13,8 +14,10 @@ import (
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
-func getContainer(containersClient containers.Store, cid string) (containers.Container, error) {
-	return containersClient.Get(context.Background(), cid)
+func getContainer(containersClient containers.Store, namespace, cid string) (containers.Container, error) {
+	ctx := context.Background()
+	ctx = namespaces.WithNamespace(ctx, namespace)
+	return containersClient.Get(ctx, cid)
 }
 
 // isSandboxContainer return true if the contaienr is a snadbox container.
@@ -63,15 +66,12 @@ func (ma *MAgent) getSandboxes() (map[string]string, error) {
 	sandboxMap := make(map[string]string)
 
 	for _, namespace := range namespaceList {
-		// namespacedCtx := namespaces.WithNamespace(ctx, namespace)
-		// fmt.Printf("namespace: %s\n", namespace)
-		// containers, err := client.ContainerService().List(namespacedCtx)
 
 		initSandboxByNamespaceFunc := func(namespace string) error {
-			nsClient, _ := containerd.New(ma.containerdAddr, containerd.WithDefaultNamespace(namespace))
-			defer nsClient.Close()
+			ctx := context.Background()
+			namespacedCtx := namespaces.WithNamespace(ctx, namespace)
 			// only listup kata contaienrs pods/containers
-			containers, err := nsClient.ContainerService().List(ctx, "runtime.name=="+kataRuntimeName)
+			containers, err := client.ContainerService().List(namespacedCtx, "runtime.name=="+kataRuntimeName)
 			if err != nil {
 				return err
 			}

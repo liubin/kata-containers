@@ -128,7 +128,7 @@ func (sc *sandboxCache) startEventsListener(addr string) error {
 					continue
 				}
 
-				c, err := getContainer(containerClient, cc.ID)
+				c, err := getContainer(containerClient, e.Namespace, cc.ID)
 				if err != nil {
 					logrus.WithError(err).Warnf("failed to get container %s", cc.ID)
 					continue
