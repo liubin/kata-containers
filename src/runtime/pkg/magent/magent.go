@@ -5,8 +5,6 @@ import (
 	"os"
 	"sync"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/containerd/containerd/defaults"
 	srvconfig "github.com/containerd/containerd/services/server/config"
 
@@ -45,10 +43,6 @@ func NewMAgent(containerdAddr, containerdConfigFile string) (*MAgent, error) {
 			sandboxes: make(map[string]string),
 		},
 	}
-
-	// init logger
-	logrus.SetLevel(logrus.DebugLevel)
-	logrus.SetOutput(os.Stdout)
 
 	if err := ma.initSandboxCache(); err != nil {
 		return nil, err

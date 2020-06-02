@@ -70,6 +70,7 @@ func (sc *sandboxCache) test() {
 	}
 }
 
+// startEventsListener will boot a thread to listen container events to manage sandbox cache
 func (sc *sandboxCache) startEventsListener(addr string) error {
 	go sc.test()
 
