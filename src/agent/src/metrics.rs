@@ -57,8 +57,11 @@ lazy_static! {
     static ref     GUEST_NETDEV_STAT: GaugeVec =
     prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"netdev_stat").as_ref() , "Guest net devices stats.", &["interface","item"]).unwrap();
 
-    static ref     DISKSTAT: GaugeVec =
+    static ref     GUEST_DISKSTAT: GaugeVec =
     prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"diskstat").as_ref() , "Disks stat in system.", &["disk","item"]).unwrap();
+
+    static ref     GUEST_MEMINFO: GaugeVec =
+    prometheus::register_gauge_vec!(format!("{}_{}",NAMESPACE_KATA_GUEST,"meminfo").as_ref() , "Statistics about memory usage on the system.", &["item"]).unwrap();
 }
 
 pub fn get_metrics(_: &protocols::agent::GetMetricsRequest) -> Result<String> {
@@ -159,7 +162,7 @@ fn update_guest_metrics() {
         }
         Ok(diskstats) => {
             for diskstat in diskstats {
-                set_gauge_vec_diskstat(&DISKSTAT, &diskstat);
+                set_gauge_vec_diskstat(&GUEST_DISKSTAT, &diskstat);
             }
         }
     }
@@ -201,6 +204,130 @@ fn update_guest_metrics() {
             }
         }
     }
+
+    // get statistics about memory from /proc/meminfo
+    match procfs::Meminfo::new() {
+        Err(err) => {
+            info!(sl!(), "failed to get guest Meminfo: {:?}", err);
+        }
+        Ok(meminfo) => {
+            set_gauge_vec_meminfo(&GUEST_MEMINFO, &meminfo);
+        }
+    }
+}
+
+fn set_gauge_vec_meminfo(gv: &prometheus::GaugeVec, meminfo: &procfs::Meminfo) {
+    gv.with_label_values(&["mem_total"])
+        .set(meminfo.mem_total as f64);
+    gv.with_label_values(&["mem_free"])
+        .set(meminfo.mem_free as f64);
+    gv.with_label_values(&["mem_available"])
+        .set(meminfo.mem_available.unwrap_or(0) as f64);
+    gv.with_label_values(&["buffers"])
+        .set(meminfo.buffers as f64);
+    gv.with_label_values(&["cached"]).set(meminfo.cached as f64);
+    gv.with_label_values(&["swap_cached"])
+        .set(meminfo.swap_cached as f64);
+    gv.with_label_values(&["active"]).set(meminfo.active as f64);
+    gv.with_label_values(&["inactive"])
+        .set(meminfo.inactive as f64);
+    gv.with_label_values(&["active_anon"])
+        .set(meminfo.active_anon.unwrap_or(0) as f64);
+    gv.with_label_values(&["inactive_anon"])
+        .set(meminfo.inactive_anon.unwrap_or(0) as f64);
+    gv.with_label_values(&["active_file"])
+        .set(meminfo.active_file.unwrap_or(0) as f64);
+    gv.with_label_values(&["inactive_file"])
+        .set(meminfo.inactive_file.unwrap_or(0) as f64);
+    gv.with_label_values(&["unevictable"])
+        .set(meminfo.unevictable.unwrap_or(0) as f64);
+    gv.with_label_values(&["mlocked"])
+        .set(meminfo.mlocked.unwrap_or(0) as f64);
+    gv.with_label_values(&["high_total"])
+        .set(meminfo.high_total.unwrap_or(0) as f64);
+    gv.with_label_values(&["high_free"])
+        .set(meminfo.high_free.unwrap_or(0) as f64);
+    gv.with_label_values(&["low_total"])
+        .set(meminfo.low_total.unwrap_or(0) as f64);
+    gv.with_label_values(&["low_free"])
+        .set(meminfo.low_free.unwrap_or(0) as f64);
+    gv.with_label_values(&["mmap_copy"])
+        .set(meminfo.mmap_copy.unwrap_or(0) as f64);
+    gv.with_label_values(&["swap_total"])
+        .set(meminfo.swap_total as f64);
+    gv.with_label_values(&["swap_free"])
+        .set(meminfo.swap_free as f64);
+    gv.with_label_values(&["dirty"]).set(meminfo.dirty as f64);
+    gv.with_label_values(&["writeback"])
+        .set(meminfo.writeback as f64);
+    gv.with_label_values(&["anon_pages"])
+        .set(meminfo.anon_pages.unwrap_or(0) as f64);
+    gv.with_label_values(&["mapped"]).set(meminfo.mapped as f64);
+    gv.with_label_values(&["shmem"])
+        .set(meminfo.shmem.unwrap_or(0) as f64);
+    gv.with_label_values(&["slab"]).set(meminfo.slab as f64);
+    gv.with_label_values(&["s_reclaimable"])
+        .set(meminfo.s_reclaimable.unwrap_or(0) as f64);
+    gv.with_label_values(&["s_unreclaim"])
+        .set(meminfo.s_unreclaim.unwrap_or(0) as f64);
+    gv.with_label_values(&["kernel_stack"])
+        .set(meminfo.kernel_stack.unwrap_or(0) as f64);
+    gv.with_label_values(&["page_tables"])
+        .set(meminfo.page_tables.unwrap_or(0) as f64);
+    gv.with_label_values(&["quicklists"])
+        .set(meminfo.quicklists.unwrap_or(0) as f64);
+    gv.with_label_values(&["nfs_unstable"])
+        .set(meminfo.nfs_unstable.unwrap_or(0) as f64);
+    gv.with_label_values(&["bounce"])
+        .set(meminfo.bounce.unwrap_or(0) as f64);
+    gv.with_label_values(&["writeback_tmp"])
+        .set(meminfo.writeback_tmp.unwrap_or(0) as f64);
+    gv.with_label_values(&["commit_limit"])
+        .set(meminfo.commit_limit.unwrap_or(0) as f64);
+    gv.with_label_values(&["committed_as"])
+        .set(meminfo.committed_as as f64);
+    gv.with_label_values(&["vmalloc_total"])
+        .set(meminfo.vmalloc_total as f64);
+    gv.with_label_values(&["vmalloc_used"])
+        .set(meminfo.vmalloc_used as f64);
+    gv.with_label_values(&["vmalloc_chunk"])
+        .set(meminfo.vmalloc_chunk as f64);
+    gv.with_label_values(&["hardware_corrupted"])
+        .set(meminfo.hardware_corrupted.unwrap_or(0) as f64);
+    gv.with_label_values(&["anon_hugepages"])
+        .set(meminfo.anon_hugepages.unwrap_or(0) as f64);
+    gv.with_label_values(&["shmem_hugepages"])
+        .set(meminfo.shmem_hugepages.unwrap_or(0) as f64);
+    gv.with_label_values(&["shmem_pmd_mapped"])
+        .set(meminfo.shmem_pmd_mapped.unwrap_or(0) as f64);
+    gv.with_label_values(&["cma_total"])
+        .set(meminfo.cma_total.unwrap_or(0) as f64);
+    gv.with_label_values(&["cma_free"])
+        .set(meminfo.cma_free.unwrap_or(0) as f64);
+    gv.with_label_values(&["hugepages_total"])
+        .set(meminfo.hugepages_total.unwrap_or(0) as f64);
+    gv.with_label_values(&["hugepages_free"])
+        .set(meminfo.hugepages_free.unwrap_or(0) as f64);
+    gv.with_label_values(&["hugepages_rsvd"])
+        .set(meminfo.hugepages_rsvd.unwrap_or(0) as f64);
+    gv.with_label_values(&["hugepages_surp"])
+        .set(meminfo.hugepages_surp.unwrap_or(0) as f64);
+    gv.with_label_values(&["hugepagesize"])
+        .set(meminfo.hugepagesize.unwrap_or(0) as f64);
+    gv.with_label_values(&["direct_map_4k"])
+        .set(meminfo.direct_map_4k.unwrap_or(0) as f64);
+    gv.with_label_values(&["direct_map_4M"])
+        .set(meminfo.direct_map_4M.unwrap_or(0) as f64);
+    gv.with_label_values(&["direct_map_2M"])
+        .set(meminfo.direct_map_2M.unwrap_or(0) as f64);
+    gv.with_label_values(&["direct_map_1G"])
+        .set(meminfo.direct_map_1G.unwrap_or(0) as f64);
+    gv.with_label_values(&["hugetlb"])
+        .set(meminfo.hugetlb.unwrap_or(0) as f64);
+    gv.with_label_values(&["per_cpu"])
+        .set(meminfo.per_cpu.unwrap_or(0) as f64);
+    gv.with_label_values(&["k_reclaimable"])
+        .set(meminfo.k_reclaimable.unwrap_or(0) as f64);
 }
 
 fn set_gauge_vec_CPU_time(gv: &prometheus::GaugeVec, cpu: &str, cpu_time: &procfs::CpuTime) {
