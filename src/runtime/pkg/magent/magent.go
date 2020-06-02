@@ -3,9 +3,15 @@ package magent
 import (
 	"fmt"
 	"os"
+	"sync"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/containerd/containerd/defaults"
 	srvconfig "github.com/containerd/containerd/services/server/config"
+
+	// Register grpc event types
+	_ "github.com/containerd/containerd/api/events"
 )
 
 // MAgent is management agent
@@ -13,6 +19,7 @@ type MAgent struct {
 	containerdAddr       string
 	containerdConfigFile string
 	containerdStatePath  string
+	sandboxCache         *sandboxCache
 }
 
 // NewMAgent create and return a new MAgent instance
@@ -29,9 +36,34 @@ func NewMAgent(containerdAddr, containerdConfigFile string) (*MAgent, error) {
 		return nil, err
 	}
 
-	return &MAgent{
+	ma := &MAgent{
 		containerdAddr:       containerdAddr,
 		containerdConfigFile: containerdConfigFile,
 		containerdStatePath:  containerdConf.State,
-	}, nil
+		sandboxCache: &sandboxCache{
+			Mutex:     &sync.Mutex{},
+			sandboxes: make(map[string]string),
+		},
+	}
+
+	// init logger
+	logrus.SetLevel(logrus.DebugLevel)
+	logrus.SetOutput(os.Stdout)
+
+	if err := ma.initSandboxCache(); err != nil {
+		return nil, err
+	}
+
+	go ma.sandboxCache.startEventsListener(ma.containerdAddr)
+
+	return ma, nil
+}
+
+func (ma *MAgent) initSandboxCache() error {
+	sandboxes, err := ma.getSandboxes()
+	if err != nil {
+		return err
+	}
+	ma.sandboxCache.init(sandboxes)
+	return nil
 }

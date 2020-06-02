@@ -103,7 +103,7 @@ func (s *service) startManagementServer(ctx context.Context) {
 	}
 
 	// write metrics address to filesystem
-	if err := cdshim.WriteAddress("metrics_address", metricsAddress); err != nil {
+	if err := cdshim.WriteAddress("magent_address", metricsAddress); err != nil {
 		logrus.Errorf("failed to write metrics address: %s", err.Error())
 		return
 	}
@@ -123,5 +123,5 @@ func socketAddress(ctx context.Context, id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(string(filepath.Separator), "containerd-shim", ns, id, "shim-metrics.sock"), nil
+	return filepath.Join(string(filepath.Separator), "containerd-shim", ns, id, "shim-magent.sock"), nil
 }

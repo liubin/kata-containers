@@ -3,8 +3,6 @@ package magent
 import (
 	"bytes"
 	"compress/gzip"
-	"context"
-	"encoding/json"
 	"io"
 	"io/ioutil"
 	"net"
@@ -17,9 +15,6 @@ import (
 	mutils "github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	"github.com/sirupsen/logrus"
 
-	"github.com/containerd/containerd"
-	"github.com/containerd/typeurl"
-	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/expfmt"
@@ -76,7 +71,7 @@ func init() {
 // getMetricsAddress get metrics address for a sandbox, the abscract unix socket address is saved
 // in `metrics_address` with the same place of `address`.
 func (ma *MAgent) getMetricsAddress(sandboxID, namespace string) (string, error) {
-	path := filepath.Join(ma.containerdStatePath, containerdRuntimeTaskPath, namespace, sandboxID, "metrics_address")
+	path := filepath.Join(ma.containerdStatePath, containerdRuntimeTaskPath, namespace, sandboxID, "magent_address")
 
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -197,92 +192,15 @@ func (ma *MAgent) ProcessMetricsRequest(w http.ResponseWriter, r *http.Request) 
 	// create encoder to encode metrics.
 	encoder := expfmt.NewEncoder(writer, contentType)
 
-	// get all sandboxes
-	sandboxes, err = ma.getSandboxes()
-	if err != nil {
-		logrus.Errorf("failed to get sandboxes: %s", err.Error())
-	} else {
-		// save running kata pods as a metrics.
-		runningShimCount.Set(float64(len(sandboxes)))
-		for sandboxID, namespace := range sandboxes {
-			// aggrate one sandbox's metrics
-			if e := ma.aggrateSandboxMetrics(sandboxID, namespace, w, r, encoder); e != nil {
-				logrus.Errorf("failed to aggrate one sandbox's metrics: %s", e.Error())
-				err = e
-			}
+	// get all sandboxes from cache
+	sandboxes = ma.sandboxCache.getAllSandboxes()
+	// save running kata pods as a metrics.
+	runningShimCount.Set(float64(len(sandboxes)))
+	for sandboxID, namespace := range sandboxes {
+		// aggrate one sandbox's metrics
+		if e := ma.aggrateSandboxMetrics(sandboxID, namespace, w, r, encoder); e != nil {
+			logrus.Errorf("failed to aggrate one sandbox's metrics: %s", e.Error())
+			err = e
 		}
 	}
-}
-
-func (ma *MAgent) getSandboxes() (map[string]string, error) {
-
-	client, err := containerd.New(ma.containerdAddr)
-	if err != nil {
-		return nil, err
-	}
-
-	defer client.Close()
-
-	ctx := context.Background()
-
-	// first all all namespaces.
-	namespaceList, err := client.NamespaceService().List(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// map of type: <key:sandbox_id => value: namespace>
-	sandboxMap := make(map[string]string)
-
-	for _, namespace := range namespaceList {
-		// namespacedCtx := namespaces.WithNamespace(ctx, namespace)
-		// fmt.Printf("namespace: %s\n", namespace)
-		// containers, err := client.ContainerService().List(namespacedCtx)
-
-		initSandboxByNamespaceFunc := func(namespace string) error {
-			nsClient, _ := containerd.New(ma.containerdAddr, containerd.WithDefaultNamespace(namespace))
-			defer nsClient.Close()
-			// only listup kata contaienrs pods/containers
-			containers, err := nsClient.ContainerService().List(ctx, "runtime.name=="+kataRuntimeName)
-			if err != nil {
-				return err
-			}
-
-			for i := range containers {
-				c := containers[i]
-				containerType, found := c.Labels["io.cri-containerd.kind"]
-				if !found {
-					continue
-				}
-
-				v, err := typeurl.UnmarshalAny(c.Spec)
-				if err != nil {
-					continue
-				}
-
-				ss := v.(*specs.Spec)
-
-				sandbox := ss.Annotations["io.kubernetes.cri.sandbox-id"]
-				if sandbox != c.ID {
-					// may be some error
-					if _, err := json.MarshalIndent(ss, "", "  "); err == nil {
-						// fmt.Println(string(m))
-					}
-				}
-
-				if containerType == "sandbox" {
-					if _, found = sandboxMap[c.ID]; !found {
-						sandboxMap[c.ID] = namespace
-					}
-				}
-			}
-			return nil
-		}
-
-		if err := initSandboxByNamespaceFunc(namespace); err != nil {
-			return nil, err
-		}
-	}
-
-	return sandboxMap, nil
 }
