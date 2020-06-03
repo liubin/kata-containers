@@ -460,6 +460,10 @@ fn set_gauge_vec_proc_status(gv: &prometheus::GaugeVec, status: &procfs::process
         .set(status.vmswap.unwrap_or(0) as f64);
     gv.with_label_values(&["hugetblpages"])
         .set(status.hugetblpages.unwrap_or(0) as f64);
+    gv.with_label_values(&["voluntary_ctxt_switches"])
+        .set(status.voluntary_ctxt_switches.unwrap_or(0) as f64);
+    gv.with_label_values(&["nonvoluntary_ctxt_switches"])
+        .set(status.nonvoluntary_ctxt_switches.unwrap_or(0) as f64);
 }
 
 // set_gauge_vec_proc_io set gauge for ProcIO
