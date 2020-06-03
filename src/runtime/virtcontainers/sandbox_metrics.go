@@ -8,6 +8,7 @@ import (
 )
 
 const namespaceHypervisor = "kata_hypervisor"
+const namespaceKatashim = "kata_shim"
 
 var (
 	hypervisorThreads = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -53,6 +54,15 @@ var (
 		Name:      "fds",
 		Help:      "Open FDs for hypervisor.",
 	})
+
+	agentRpcDurationsHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: namespaceKatashim,
+		Name:      "agent_rpc_durations_histogram_million_seconds",
+		Help:      "RPC latency distributions.",
+		Buckets:   prometheus.ExponentialBuckets(1, 2, 10),
+	},
+		[]string{"action"},
+	)
 )
 
 func RegMetrics() {
@@ -62,6 +72,7 @@ func RegMetrics() {
 	prometheus.MustRegister(hypervisorNetdev)
 	prometheus.MustRegister(hypervisorIOStat)
 	prometheus.MustRegister(hypervisorOpenFDs)
+	prometheus.MustRegister(agentRpcDurationsHistogram)
 }
 
 // UpdateRuntimeMetrics update shim/hypervisor's metrics

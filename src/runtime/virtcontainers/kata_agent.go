@@ -2010,6 +2010,7 @@ func (k *kataAgent) getReqContext(reqName string) (ctx context.Context, cancel c
 }
 
 func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
+	start := time.Now()
 	span, _ := k.trace("sendReq")
 	span.SetTag("request", request)
 	defer span.Finish()
@@ -2033,6 +2034,9 @@ func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
 	}
 	k.Logger().WithField("name", msgName).WithField("req", message.String()).Debug("sending request")
 
+	defer func() {
+		agentRpcDurationsHistogram.WithLabelValues(msgName).Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
+	}()
 	return handler(ctx, request)
 }
 
