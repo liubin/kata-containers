@@ -16,7 +16,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/expfmt"
 
 	dto "github.com/prometheus/client_model/go"
@@ -26,6 +25,8 @@ const (
 	kataRuntimeName              = "io.containerd.kata.v2"
 	containerdRuntimeTaskPath    = "io.containerd.runtime.v2.task"
 	promNamespaceManagementAgent = "kata_magent"
+	contentTypeHeader            = "Content-Type"
+	contentEncodingHeader        = "Content-Encoding"
 )
 
 var (
@@ -80,6 +81,7 @@ func (ma *MAgent) getMetricsAddress(sandboxID, namespace string) (string, error)
 	return string(data), nil
 }
 
+// aggrateSandboxMetrics will get metrics from one sandbox and do some process
 func (ma *MAgent) aggrateSandboxMetrics(sandboxID, namespace string, w http.ResponseWriter, r *http.Request, encoder expfmt.Encoder) error {
 	socket, err := ma.getMetricsAddress(sandboxID, namespace)
 	if err != nil {
@@ -115,6 +117,7 @@ func (ma *MAgent) aggrateSandboxMetrics(sandboxID, namespace string, w http.Resp
 	reader := bytes.NewReader(body)
 	decoder := expfmt.NewDecoder(reader, expfmt.FmtText)
 
+	// decode metrics from sandbox to MetricFamily
 	list := make([]*dto.MetricFamily, 0)
 	for {
 		mf := &dto.MetricFamily{}
@@ -127,6 +130,7 @@ func (ma *MAgent) aggrateSandboxMetrics(sandboxID, namespace string, w http.Resp
 		list = append(list, mf)
 	}
 
+	// newList contains processed MetricFamily
 	newList := make([]*dto.MetricFamily, len(list))
 
 	for i := range list {
@@ -146,7 +150,7 @@ func (ma *MAgent) aggrateSandboxMetrics(sandboxID, namespace string, w http.Resp
 		newList[i] = metricFamily
 	}
 
-	// encoder := expfmt.NewEncoder(w, expfmt.FmtText)
+	// write encoded metrics to encoder
 	for _, mf := range newList {
 		if err := encoder.Encode(mf); err != nil {
 			return err
@@ -173,13 +177,18 @@ func (ma *MAgent) ProcessMetricsRequest(w http.ResponseWriter, r *http.Request) 
 	}()
 
 	// gather metrics collected for management agent.
-	x := promhttp.Handler()
-	x.ServeHTTP(w, r)
 
 	// prepare writer for writing response.
 	contentType := expfmt.Negotiate(r.Header)
+
+	// set response header
+	header := w.Header()
+	header.Set(contentTypeHeader, string(contentType))
+
+	// create writer
 	writer := io.Writer(w)
 	if mutils.GzipAccepted(r.Header) {
+		header.Set(contentEncodingHeader, "gzip")
 		gz := gzipPool.Get().(*gzip.Writer)
 		defer gzipPool.Put(gz)
 
@@ -191,6 +200,20 @@ func (ma *MAgent) ProcessMetricsRequest(w http.ResponseWriter, r *http.Request) 
 
 	// create encoder to encode metrics.
 	encoder := expfmt.NewEncoder(writer, contentType)
+
+	mfs, err := prometheus.DefaultGatherer.Gather()
+	for i := range mfs {
+		metricFamily := mfs[i]
+
+		if metricFamily.Name != nil && !strings.HasPrefix(*metricFamily.Name, promNamespaceManagementAgent) {
+			metricFamily.Name = mutils.String2Pointer(promNamespaceManagementAgent + "_" + *metricFamily.Name)
+		}
+
+		// encode and write to output
+		if err := encoder.Encode(metricFamily); err != nil {
+			logrus.WithError(err).Warnf("failed to encode metrics: %+v", metricFamily)
+		}
+	}
 
 	// get all sandboxes from cache
 	sandboxes = ma.sandboxCache.getAllSandboxes()

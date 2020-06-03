@@ -55,7 +55,7 @@ var (
 	})
 )
 
-func init() {
+func RegMetrics() {
 	prometheus.MustRegister(hypervisorThreads)
 	prometheus.MustRegister(hypervisorProcStatus)
 	prometheus.MustRegister(hypervisorProcStat)

@@ -21,13 +21,13 @@ var (
 	katashimThreads = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace: namespaceKatashim,
 		Name:      "threads",
-		Help:      "katashim process threads.",
+		Help:      "Katashim process threads.",
 	})
 
 	katashimProcStatus = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespaceKatashim,
 		Name:      "proc_status",
-		Help:      "katashim proc status.",
+		Help:      "Katashim proc status.",
 	},
 		[]string{"item"},
 	)
@@ -35,7 +35,7 @@ var (
 	katashimProcStat = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespaceKatashim,
 		Name:      "proc_stat",
-		Help:      "katashim proc stat.",
+		Help:      "Katashim proc stat.",
 	},
 		[]string{"item"},
 	)
@@ -43,7 +43,7 @@ var (
 	katashimNetdev = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespaceKatashim,
 		Name:      "netdev",
-		Help:      "Net devices stats.",
+		Help:      "Katashim network devices stat.",
 	},
 		[]string{"interface", "item"},
 	)
@@ -51,7 +51,7 @@ var (
 	katashimIOStat = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespaceKatashim,
 		Name:      "io_stat",
-		Help:      "Process IO stat.",
+		Help:      "Katashim process IO stat.",
 	},
 		[]string{"item"},
 	)
@@ -59,11 +59,11 @@ var (
 	katashimOpenFDs = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace: namespaceKatashim,
 		Name:      "fds",
-		Help:      "Open FDs for katashim.",
+		Help:      "Katashim open FDs.",
 	})
 )
 
-func init() {
+func regMetrics() {
 	prometheus.MustRegister(rpcDurationsHistogram)
 	prometheus.MustRegister(katashimThreads)
 	prometheus.MustRegister(katashimProcStatus)
@@ -73,6 +73,7 @@ func init() {
 	prometheus.MustRegister(katashimOpenFDs)
 }
 
+// updateShimMetrics will update metrics for kata shim process itself
 func updateShimMetrics() error {
 	proc, err := procfs.Self()
 	if err != nil {
