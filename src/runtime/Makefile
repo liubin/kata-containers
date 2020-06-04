@@ -689,7 +689,7 @@ coverage:
 	go test -v -mod=vendor -covermode=atomic -coverprofile=coverage.txt ./...
 	go tool cover -html=coverage.txt -o coverage.html
 
-install: default install-runtime install-containerd-shim-v2 install-netmon
+install: default install-runtime install-containerd-shim-v2 install-magent install-netmon
 
 install-bin: $(BINLIST)
 	$(QUIET_INST)$(foreach f,$(BINLIST),$(call INSTALL_EXEC,$f,$(BINDIR)))
@@ -699,6 +699,9 @@ install-runtime: runtime install-scripts install-completions install-configs ins
 install-netmon: install-bin-libexec
 
 install-containerd-shim-v2: $(SHIMV2)
+	$(QUIET_INST)$(call INSTALL_EXEC,$<,$(BINDIR))
+
+install-magent: $(MAGENT)
 	$(QUIET_INST)$(call INSTALL_EXEC,$<,$(BINDIR))
 
 install-bin-libexec: $(BINLIBEXECLIST)
@@ -799,6 +802,8 @@ endif
           "$(foreach b,$(sort $(BINLIST)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
 	@printf \
           "$(foreach b,$(sort $(SHIMV2)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
+	@printf \
+          "$(foreach b,$(sort $(MAGENT)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
 	@printf \
           "$(foreach b,$(sort $(BINLIBEXECLIST)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(PKGLIBEXECDIR)/$(b))\\\n"))"
 	@printf \
