@@ -52,7 +52,7 @@ var (
 		Namespace: promNamespaceManagementAgent,
 		Name:      "scrape_durations_histogram_million_seconds",
 		Help:      "Time used to scrape from shims",
-		Buckets:   prometheus.ExponentialBuckets(1, 4, 8),
+		Buckets:   prometheus.ExponentialBuckets(1, 2, 10),
 	})
 
 	gzipPool = sync.Pool{
@@ -62,7 +62,7 @@ var (
 	}
 )
 
-func init() {
+func regMetrics() {
 	prometheus.MustRegister(runningShimCount)
 	prometheus.MustRegister(scrapeCount)
 	prometheus.MustRegister(scrapeFailedCount)
@@ -90,8 +90,6 @@ func (ma *MAgent) ProcessMetricsRequest(w http.ResponseWriter, r *http.Request) 
 		scrapeDurationsHistogram.Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
 	}()
 
-	// gather metrics collected for management agent.
-
 	// prepare writer for writing response.
 	contentType := expfmt.Negotiate(r.Header)
 
@@ -115,6 +113,7 @@ func (ma *MAgent) ProcessMetricsRequest(w http.ResponseWriter, r *http.Request) 
 	// create encoder to encode metrics.
 	encoder := expfmt.NewEncoder(writer, contentType)
 
+	// gather metrics collected for management agent.
 	mfs, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
 		logrus.WithError(err).Error("failed to Gather metrics from prometheus.DefaultGatherer")
@@ -150,17 +149,49 @@ func (ma *MAgent) aggregateSandboxMetrics(encoder expfmt.Encoder) error {
 	// save running kata pods as a metrics.
 	runningShimCount.Set(float64(len(sandboxes)))
 
+	if len(sandboxes) == 0 {
+		return nil
+	}
+
 	// sandboxMetricsList contains list of MetricFamily list from one sandbox.
 	sandboxMetricsList := make([][]*dto.MetricFamily, 0)
 
+	wg := &sync.WaitGroup{}
+	// used to receive response
+	results := make(chan []*dto.MetricFamily, len(sandboxes))
+
+	logrus.Debugf("sandboxes count: %d", len(sandboxes))
+
 	// get metrics from sandbox's shim
 	for sandboxID, namespace := range sandboxes {
-		sandboxMetrics, err := ma.getSandboxMetrics(sandboxID, namespace)
-		if err != nil {
-			logrus.WithError(err).Errorf("failed to get metrics for sandbox: %s", sandboxID)
-			continue
+		wg.Add(1)
+		go func(sandboxID, namespace string, results chan<- []*dto.MetricFamily) {
+			sandboxMetrics, err := ma.getSandboxMetrics(sandboxID, namespace)
+			if err != nil {
+				logrus.WithError(err).Errorf("failed to get metrics for sandbox: %s", sandboxID)
+			}
+
+			results <- sandboxMetrics
+			wg.Done()
+			logrus.WithField("sandbox_id", sandboxID).Debug("job finished")
+		}(sandboxID, namespace, results)
+
+		logrus.WithField("sandbox_id", sandboxID).Debug("job started")
+	}
+
+	wg.Wait()
+	logrus.Debug("all job finished")
+	close(results)
+
+	// get all job result from chan
+	for sandboxMetrics := range results {
+		if sandboxMetrics != nil {
+			sandboxMetricsList = append(sandboxMetricsList, sandboxMetrics)
 		}
-		sandboxMetricsList = append(sandboxMetricsList, sandboxMetrics)
+	}
+
+	if len(sandboxMetricsList) == 0 {
+		return nil
 	}
 
 	// metricsMap used to aggregate metirc from multiple sandboxes

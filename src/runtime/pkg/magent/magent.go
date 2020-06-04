@@ -48,6 +48,9 @@ func NewMAgent(containerdAddr, containerdConfigFile string) (*MAgent, error) {
 		return nil, err
 	}
 
+	// register metrics
+	regMetrics()
+
 	go ma.sandboxCache.startEventsListener(ma.containerdAddr)
 
 	return ma, nil
