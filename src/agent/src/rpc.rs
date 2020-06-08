@@ -19,6 +19,7 @@ use protocols::health::{
 };
 use protocols::types::Interface;
 use rustjail;
+use rustjail::cgroups::notifier;
 use rustjail::container::{BaseContainer, LinuxContainer};
 use rustjail::errors::*;
 use rustjail::process::Process;
@@ -179,6 +180,17 @@ impl agentService {
         };
 
         ctr.exec()?;
+
+        // start oom event loop
+        if ctr.cgroup_manager.is_some(){
+            let cg_path = ctr.cgroup_manager.as_ref().unwrap().get_cg_path("memory");
+            if cg_path.is_some() {
+                let rx = notifier::notify_oom(cid.as_str(), cg_path.unwrap())?;
+                s.run_oom_event_monitor(rx, cid);
+            }
+        }else{
+            // FIXME
+        }
 
         Ok(())
     }
@@ -511,6 +523,31 @@ impl agentService {
         let mut resp = ReadStreamResponse::new();
         resp.set_data(vector);
 
+        Ok(resp)
+    }
+
+    fn do_get_oom_events(
+        &self,
+        req: protocols::agent::ReadStreamRequest,
+        stdout: bool,
+    ) -> Result<protocols::agent::ReadStreamResponse> {
+        let cid = req.container_id;
+
+        let rx = &self.sandbox.lock().unwrap().oom_events_chan.rx;
+
+        match rx.recv() {
+            Err(err) => {
+                return Err(ErrorKind::ErrorCode(format!(
+                    "failed to get oom events from channel: {:?}",
+                    err
+                ))
+                .into());
+            }
+            Ok(container_id) => {}
+        }
+        //  &pb.OOMEvent{ContainerId: containerID}, nil
+
+        let mut resp = ReadStreamResponse::new();
         Ok(resp)
     }
 }
@@ -1229,6 +1266,24 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             }
         }
     }
+
+    // fn get_oom_events(
+    //     &self,
+    //     _ctx: &ttrpc::TtrpcContext,
+    //     req: protocols::agent::GetMetricsRequest,
+    // ) -> ttrpc::Result<Metrics> {
+    //     match get_metrics(&req) {
+    //         Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+    //             ttrpc::Code::INTERNAL,
+    //             e.to_string(),
+    //         ))),
+    //         Ok(s) => {
+    //             let mut metrics = Metrics::new();
+    //             metrics.set_metrics(s);
+    //             Ok(metrics)
+    //         }
+    //     }
+    // }
 }
 
 #[derive(Clone)]

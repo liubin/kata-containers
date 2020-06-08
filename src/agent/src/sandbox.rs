@@ -20,7 +20,21 @@ use rustjail::process::Process;
 use slog::Logger;
 use std::collections::HashMap;
 use std::fs;
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::thread;
+
+#[derive(Debug)]
+pub struct EventChannel<T> {
+    pub tx: Sender<T>,
+    pub rx: Receiver<T>,
+}
+
+impl<T> EventChannel<T> {
+    pub fn new() -> EventChannel<T> {
+        let (tx, rx) = mpsc::channel::<T>();
+        EventChannel { tx: tx, rx: rx }
+    }
+}
 
 #[derive(Debug)]
 pub struct Sandbox {
@@ -40,12 +54,15 @@ pub struct Sandbox {
     pub sandbox_pid_ns: bool,
     pub sender: Option<Sender<i32>>,
     pub rtnl: Option<RtnlHandle>,
+    pub oom_events_chan: EventChannel<String>,
 }
 
 impl Sandbox {
     pub fn new(logger: &Logger) -> Result<Self> {
         let fs_type = get_mount_fs_type("/")?;
         let logger = logger.new(o!("subsystem" => "sandbox"));
+
+        let oom_events = EventChannel::<String>::new();
 
         Ok(Sandbox {
             logger: logger.clone(),
@@ -64,6 +81,7 @@ impl Sandbox {
             sandbox_pid_ns: false,
             sender: None,
             rtnl: Some(RtnlHandle::new(NETLINK_ROUTE, 0).unwrap()),
+            oom_events_chan: oom_events,
         })
     }
 
@@ -234,6 +252,21 @@ impl Sandbox {
         }
 
         Ok(())
+    }
+
+    pub fn run_oom_event_monitor(&self, rx: Receiver<String>, container_id: String) {
+        let tx = self.oom_events_chan.tx.clone();
+        let logger = self.logger.clone();
+
+        thread::spawn(move || {
+            for event in rx {
+                info!(logger, "got an OOM event {:?}", event);
+                match tx.send(container_id.clone()) {
+                    Err(err) => error!(logger, "failed to send message: {:?}", err),
+                    Ok(_) => {}
+                }
+            }
+        });
     }
 }
 

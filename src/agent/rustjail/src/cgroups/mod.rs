@@ -10,6 +10,7 @@ use protocols::agent::CgroupStats;
 use std::collections::HashMap;
 
 pub mod fs;
+pub mod notifier;
 pub mod systemd;
 
 pub type FreezerState = &'static str;
