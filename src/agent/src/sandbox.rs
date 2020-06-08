@@ -20,7 +20,22 @@ use rustjail::process::Process;
 use slog::Logger;
 use std::collections::HashMap;
 use std::fs;
-use std::sync::mpsc::Sender;
+use std::sync::{Arc, Mutex};
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::thread;
+
+// #[derive(Debug)]
+// pub struct EventChannel<T> {
+//     pub tx: Sender<T>,
+//     pub rx: Receiver<T>,
+// }
+
+// impl<T> EventChannel<T> {
+//     pub fn new() -> EventChannel<T> {
+//         let (tx, rx) = mpsc::channel::<T>();
+//         EventChannel { tx: tx, rx: rx }
+//     }
+// }
 
 #[derive(Debug)]
 pub struct Sandbox {
@@ -40,12 +55,17 @@ pub struct Sandbox {
     pub sandbox_pid_ns: bool,
     pub sender: Option<Sender<i32>>,
     pub rtnl: Option<RtnlHandle>,
+    pub event_rx: Arc<Mutex<Receiver<String>>>,
+    pub event_tx: Sender<String>,
+    // pub oom_events_chan: Arc<Mutex<EventChannel<String>>>,
 }
 
 impl Sandbox {
     pub fn new(logger: &Logger) -> Result<Self> {
         let fs_type = get_mount_fs_type("/")?;
         let logger = logger.new(o!("subsystem" => "sandbox"));
+        let (tx, rx) = mpsc::channel::<String>();
+        let event_rx = Arc::new(Mutex::new(rx));
 
         Ok(Sandbox {
             logger: logger.clone(),
@@ -64,6 +84,8 @@ impl Sandbox {
             sandbox_pid_ns: false,
             sender: None,
             rtnl: Some(RtnlHandle::new(NETLINK_ROUTE, 0).unwrap()),
+            event_rx: event_rx,
+            event_tx: tx,
         })
     }
 
@@ -234,6 +256,21 @@ impl Sandbox {
         }
 
         Ok(())
+    }
+
+    pub fn run_oom_event_monitor(&self, rx: Receiver<String>, container_id: String) {
+        let tx = self.event_tx.clone();
+        let logger = self.logger.clone();
+
+        thread::spawn(move || {
+            for event in rx {
+                info!(logger, "got an OOM event {:?}", event);
+                match tx.send(container_id.clone()) {
+                    Err(err) => error!(logger, "failed to send message: {:?}", err),
+                    Ok(_) => {}
+                }
+            }
+        });
     }
 }
 
