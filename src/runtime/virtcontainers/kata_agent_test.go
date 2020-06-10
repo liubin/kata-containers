@@ -245,6 +245,10 @@ func (p *gRPCProxy) MemHotplugByProbe(ctx context.Context, req *pb.MemHotplugByP
 	return &gpb.Empty{}, nil
 }
 
+func (p *gRPCProxy) GetMetrics(ctx context.Context, req *pb.GetMetricsRequest) (*pb.Metrics, error) {
+	return &pb.Metrics{}, nil
+}
+
 func gRPCRegister(s *ttrpc.Server, srv interface{}) {
 	switch g := srv.(type) {
 	case *gRPCProxy:

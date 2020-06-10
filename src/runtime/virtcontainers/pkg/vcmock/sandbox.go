@@ -212,3 +212,13 @@ func (s *Sandbox) UpdateRoutes(routes []*vcTypes.Route) ([]*vcTypes.Route, error
 func (s *Sandbox) ListRoutes() ([]*vcTypes.Route, error) {
 	return nil, nil
 }
+
+// UpdateRuntimeMetrics implements the VCSandbox function of the same name.
+func (s *Sandbox) UpdateRuntimeMetrics() error {
+	return nil
+}
+
+// GetAgentMetrics implements the VCSandbox function of the same name.
+func (s *Sandbox) GetAgentMetrics() (string, error) {
+	return "", nil
+}

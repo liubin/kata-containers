@@ -21,9 +21,9 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	aTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	kataclient "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/client"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
-	aTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	vccgroups "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cgroups"
 	ns "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/nsenter"
@@ -127,6 +127,7 @@ const (
 	grpcSetGuestDateTimeRequest  = "grpc.SetGuestDateTimeRequest"
 	grpcStartTracingRequest      = "grpc.StartTracingRequest"
 	grpcStopTracingRequest       = "grpc.StopTracingRequest"
+	grpcGetMetricsRequest        = "grpc.GetMetricsRequest"
 )
 
 // The function is declared this way for mocking in unit tests
@@ -1989,6 +1990,9 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	k.reqHandlers[grpcStopTracingRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
 		return k.client.AgentServiceClient.StopTracing(ctx, req.(*grpc.StopTracingRequest))
 	}
+	k.reqHandlers[grpcGetMetricsRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.GetMetrics(ctx, req.(*grpc.GetMetricsRequest))
+	}
 }
 
 func (k *kataAgent) getReqContext(reqName string) (ctx context.Context, cancel context.CancelFunc) {
@@ -2006,6 +2010,7 @@ func (k *kataAgent) getReqContext(reqName string) (ctx context.Context, cancel c
 }
 
 func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
+	start := time.Now()
 	span, _ := k.trace("sendReq")
 	span.SetTag("request", request)
 	defer span.Finish()
@@ -2029,6 +2034,9 @@ func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
 	}
 	k.Logger().WithField("name", msgName).WithField("req", message.String()).Debug("sending request")
 
+	defer func() {
+		agentRpcDurationsHistogram.WithLabelValues(msgName).Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
+	}()
 	return handler(ctx, request)
 }
 
@@ -2310,4 +2318,13 @@ func (k *kataAgent) save() persistapi.AgentState {
 func (k *kataAgent) load(s persistapi.AgentState) {
 	k.state.ProxyPid = s.ProxyPid
 	k.state.URL = s.URL
+}
+
+func (k *kataAgent) getAgentMetrics(req *grpc.GetMetricsRequest) (*grpc.Metrics, error) {
+	resp, err := k.sendReq(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.(*grpc.Metrics), nil
 }
