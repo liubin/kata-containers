@@ -4,6 +4,7 @@ go 1.14
 
 require (
 	github.com/BurntSushi/toml v0.3.1
+	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver v0.0.0-20190414102917-ba2c2ddd8906
 	github.com/cilium/ebpf v0.0.0-20200421083123-d05ecd062fb1 // indirect
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
@@ -37,7 +38,10 @@ require (
 	github.com/opencontainers/selinux v1.4.0
 	github.com/opentracing/opentracing-go v1.1.0
 	github.com/pkg/errors v0.8.1
-	github.com/prometheus/procfs v0.0.0-20190328153300-af7bedc223fb
+	github.com/prometheus/client_golang v1.0.0
+	github.com/prometheus/client_model v0.2.0
+	github.com/prometheus/common v0.10.0
+	github.com/prometheus/procfs v0.0.2
 	github.com/safchain/ethtool v0.0.0-20190326074333-42ed695e3de8
 	github.com/seccomp/libseccomp-golang v0.9.1 // indirect
 	github.com/sirupsen/logrus v1.4.2
