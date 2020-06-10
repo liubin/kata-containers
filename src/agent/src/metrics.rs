@@ -1,3 +1,8 @@
+// Copyright (c) 2020 Ant Financial
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+
 extern crate procfs;
 
 use prometheus::{Encoder, Gauge, GaugeVec, IntCounter, TextEncoder};
