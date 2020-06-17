@@ -17,8 +17,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/types"
 	mutils "github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
-	"github.com/sirupsen/logrus"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/expfmt"
@@ -27,8 +27,6 @@ import (
 )
 
 const (
-	kataRuntimeName              = "io.containerd.kata.v2"
-	containerdRuntimeTaskPath    = "io.containerd.runtime.v2.task"
 	promNamespaceManagementAgent = "kata_magent"
 	contentTypeHeader            = "Content-Type"
 	contentEncodingHeader        = "Content-Encoding"
@@ -55,7 +53,7 @@ var (
 
 	scrapeDurationsHistogram = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: promNamespaceManagementAgent,
-		Name:      "scrape_durations_histogram_million_seconds",
+		Name:      "scrape_durations_histogram_milliseconds",
 		Help:      "Time used to scrape from shims",
 		Buckets:   prometheus.ExponentialBuckets(1, 2, 10),
 	})
@@ -67,17 +65,17 @@ var (
 	}
 )
 
-func regMetrics() {
+func registerMetrics() {
 	prometheus.MustRegister(runningShimCount)
 	prometheus.MustRegister(scrapeCount)
 	prometheus.MustRegister(scrapeFailedCount)
 	prometheus.MustRegister(scrapeDurationsHistogram)
 }
 
-// getMetricsAddress get metrics address for a sandbox, the abscract unix socket address is saved
+// getMetricsAddress get metrics address for a sandbox, the abstract unix socket address is saved
 // in `metrics_address` with the same place of `address`.
 func (ma *MAgent) getMetricsAddress(sandboxID, namespace string) (string, error) {
-	path := filepath.Join(ma.containerdStatePath, containerdRuntimeTaskPath, namespace, sandboxID, "magent_address")
+	path := filepath.Join(ma.containerdStatePath, types.ContainerdRuntimeTaskPath, namespace, sandboxID, "magent_address")
 
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -121,7 +119,7 @@ func (ma *MAgent) ProcessMetricsRequest(w http.ResponseWriter, r *http.Request) 
 	// gather metrics collected for management agent.
 	mfs, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
-		logrus.WithError(err).Error("failed to Gather metrics from prometheus.DefaultGatherer")
+		magentLog.WithError(err).Error("failed to Gather metrics from prometheus.DefaultGatherer")
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
 		return
@@ -136,13 +134,13 @@ func (ma *MAgent) ProcessMetricsRequest(w http.ResponseWriter, r *http.Request) 
 
 		// encode and write to output
 		if err := encoder.Encode(metricFamily); err != nil {
-			logrus.WithError(err).Warnf("failed to encode metrics: %+v", metricFamily)
+			magentLog.WithError(err).Warnf("failed to encode metrics")
 		}
 	}
 
 	// aggregate sandboxes metrics and write to response by encoder
 	if err := ma.aggregateSandboxMetrics(encoder); err != nil {
-		logrus.WithError(err).Errorf("failed aggregateSandboxMetrics")
+		magentLog.WithError(err).Errorf("failed aggregateSandboxMetrics")
 		scrapeFailedCount.Inc()
 	}
 }
@@ -165,7 +163,7 @@ func (ma *MAgent) aggregateSandboxMetrics(encoder expfmt.Encoder) error {
 	// used to receive response
 	results := make(chan []*dto.MetricFamily, len(sandboxes))
 
-	logrus.Debugf("sandboxes count: %d", len(sandboxes))
+	magentLog.WithField("sandbox_count", len(sandboxes)).Debugf("sandboxes count")
 
 	// get metrics from sandbox's shim
 	for sandboxID, namespace := range sandboxes {
@@ -173,19 +171,19 @@ func (ma *MAgent) aggregateSandboxMetrics(encoder expfmt.Encoder) error {
 		go func(sandboxID, namespace string, results chan<- []*dto.MetricFamily) {
 			sandboxMetrics, err := ma.getSandboxMetrics(sandboxID, namespace)
 			if err != nil {
-				logrus.WithError(err).Errorf("failed to get metrics for sandbox: %s", sandboxID)
+				magentLog.WithError(err).WithField("sandbox_id", sandboxID).Errorf("failed to get metrics for sandbox")
 			}
 
 			results <- sandboxMetrics
 			wg.Done()
-			logrus.WithField("sandbox_id", sandboxID).Debug("job finished")
+			magentLog.WithField("sandbox_id", sandboxID).Debug("job finished")
 		}(sandboxID, namespace, results)
 
-		logrus.WithField("sandbox_id", sandboxID).Debug("job started")
+		magentLog.WithField("sandbox_id", sandboxID).Debug("job started")
 	}
 
 	wg.Wait()
-	logrus.Debug("all job finished")
+	magentLog.Debug("all job finished")
 	close(results)
 
 	// get all job result from chan
@@ -199,7 +197,7 @@ func (ma *MAgent) aggregateSandboxMetrics(encoder expfmt.Encoder) error {
 		return nil
 	}
 
-	// metricsMap used to aggregate metirc from multiple sandboxes
+	// metricsMap used to aggregate metrics from multiple sandboxes
 	// key is MetricFamily.Name, and value is list of MetricFamily from multiple sandboxes
 	metricsMap := make(map[string]*dto.MetricFamily)
 	// merge MetricFamily list for the same MetricFamily.Name from multiple sandboxes.
@@ -274,15 +272,8 @@ func (ma *MAgent) getSandboxMetrics(sandboxID, namespace string) ([]*dto.MetricF
 			}
 			return nil, err
 		}
-		list = append(list, mf)
-	}
 
-	// newList contains processed MetricFamily
-	newList := make([]*dto.MetricFamily, len(list))
-
-	for i := range list {
-		metricFamily := list[i]
-		metricList := metricFamily.Metric
+		metricList := mf.Metric
 		for j := range metricList {
 			metric := metricList[j]
 			metric.Label = append(metric.Label, &dto.LabelPair{
@@ -292,11 +283,12 @@ func (ma *MAgent) getSandboxMetrics(sandboxID, namespace string) ([]*dto.MetricF
 		}
 
 		// Kata shim are using prometheus go client, add an prefix for metric name to avoid confusing
-		if metricFamily.Name != nil && (strings.HasPrefix(*metricFamily.Name, "go_") || strings.HasPrefix(*metricFamily.Name, "process_")) {
-			metricFamily.Name = mutils.String2Pointer("kata_shim_" + *metricFamily.Name)
+		if mf.Name != nil && (strings.HasPrefix(*mf.Name, "go_") || strings.HasPrefix(*mf.Name, "process_")) {
+			mf.Name = mutils.String2Pointer("kata_shim_" + *mf.Name)
 		}
-		newList[i] = metricFamily
+
+		list = append(list, mf)
 	}
 
-	return newList, nil
+	return list, nil
 }

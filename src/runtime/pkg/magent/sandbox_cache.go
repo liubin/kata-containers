@@ -17,6 +17,7 @@ import (
 	eventstypes "github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/events"
 	"github.com/containerd/typeurl"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/types"
 
 	// Register grpc event types
 	_ "github.com/containerd/containerd/api/events"
@@ -77,13 +78,20 @@ func (sc *sandboxCache) startEventsListener(addr string) error {
 
 	eventsClient := client.EventService()
 	containerClient := client.ContainerService()
-	eventsCh, errCh := eventsClient.Subscribe(ctx)
+
+	// only need create/delete events.
+	eventFilters := []string{
+		`topic=="/containers/create"`,
+		`topic=="/containers/delete"`,
+	}
+
+	eventsCh, errCh := eventsClient.Subscribe(ctx, eventFilters...)
 	for {
 		var e *events.Envelope
 		select {
 		case e = <-eventsCh:
 		case err = <-errCh:
-			logrus.WithError(err).Warn("get error from error chan")
+			magentLog.WithError(err).Warn("get error from error chan")
 			return err
 		}
 
@@ -92,12 +100,12 @@ func (sc *sandboxCache) startEventsListener(addr string) error {
 			if e.Event != nil {
 				v, err := typeurl.UnmarshalAny(e.Event)
 				if err != nil {
-					logrus.WithError(err).Warn("cannot unmarshal an event from Any")
+					magentLog.WithError(err).Warn("cannot unmarshal an event from Any")
 					continue
 				}
 				eventBody, err = json.Marshal(v)
 				if err != nil {
-					logrus.WithError(err).Warn("cannot marshal Any into JSON")
+					magentLog.WithError(err).Warn("cannot marshal Any into JSON")
 					continue
 				}
 			}
@@ -113,24 +121,27 @@ func (sc *sandboxCache) startEventsListener(addr string) error {
 				cc := eventstypes.ContainerCreate{}
 				err := json.Unmarshal(eventBody, &cc)
 				if err != nil {
-					logrus.WithError(err).Warnf("unmarshal ContainerCreate failed: %s", string(eventBody))
+					magentLog.WithError(err).WithField("body", string(eventBody)).Warn("unmarshal ContainerCreate failed")
+					continue
 				}
 
 				// skip non-kata contaienrs
-				if cc.Runtime.Name != kataRuntimeName {
+				if cc.Runtime.Name != types.KataRuntimeName {
 					continue
 				}
 
 				c, err := getContainer(containerClient, e.Namespace, cc.ID)
 				if err != nil {
-					logrus.WithError(err).Warnf("failed to get container %s", cc.ID)
+					magentLog.WithError(err).WithField("container", cc.ID).Warn("failed to get container")
 					continue
 				}
 
+				// if the container is a sandbox container,
+				// means the VM is started, and can start to collect metrics from the VM.
 				if isSandboxContainer(&c) {
 					// we can simply put the contaienrid in sandboxes list if the conatiner is a sandbox container
 					sc.putIfNotExists(cc.ID, e.Namespace)
-					logrus.Infof("add sandbox %s to cache", cc.ID)
+					magentLog.WithField("container", cc.ID).Info("add sandbox to cache")
 				}
 			} else if e.Topic == "/containers/delete" {
 				// Namespace: k8s.io
@@ -141,16 +152,17 @@ func (sc *sandboxCache) startEventsListener(addr string) error {
 				cd := &eventstypes.ContainerDelete{}
 				err := json.Unmarshal(eventBody, &cd)
 				if err != nil {
-					logrus.WithError(err).Warnf("unmarshal ContainerDelete failed: %s", string(eventBody))
+					magentLog.WithError(err).WithField("body", string(eventBody)).Warn("unmarshal ContainerDelete failed")
 				}
 
 				// if container in sandboxes list, it must be the pause container in the sandbox,
 				// so the contaienr id is the sandbox id
-				// we can simply delete the contaienrid from sandboxes list
+				// we can simply delete the contaienr from sandboxes list
+				// the last container in a sandbox is deleted, means the VM will stop.
 				_, deleted := sc.deleteIfExists(cd.ID)
-				logrus.Infof("delete sandbox from cache for: %s, result: %t", cd.ID, deleted)
+				magentLog.WithFields(logrus.Fields{"container": cd.ID, "result": deleted}).Info("delete sandbox from cache")
 			} else {
-				logrus.Debugf("other events: Namespace: %s, Topic: %s, Event: %s", e.Namespace, e.Topic, string(eventBody))
+				magentLog.WithFields(logrus.Fields{"Namespace": e.Namespace, "Topic": e.Topic, "Event": string(eventBody)}).Error("other events")
 			}
 
 		}

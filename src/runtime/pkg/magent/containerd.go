@@ -8,12 +8,14 @@ package magent
 import (
 	"context"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/typeurl"
-	"github.com/sirupsen/logrus"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/types"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -25,12 +27,12 @@ func getContainer(containersClient containers.Store, namespace, cid string) (con
 	return containersClient.Get(ctx, cid)
 }
 
-// isSandboxContainer return true if the contaienr is a snadbox container.
+// isSandboxContainer return true if the container is a sandbox container.
 func isSandboxContainer(c *containers.Container) bool {
 	// unmarshal from any to spec.
 	v, err := typeurl.UnmarshalAny(c.Spec)
 	if err != nil {
-		logrus.WithError(err).Errorf("failed to Unmarshal container spec")
+		magentLog.WithError(err).Error("failed to Unmarshal container spec")
 		return false
 	}
 
@@ -40,7 +42,7 @@ func isSandboxContainer(c *containers.Container) bool {
 	// get container type
 	containerType, err := oci.ContainerType(*ociSpec)
 	if err != nil {
-		logrus.WithError(err).Errorf("failed to get contaienr type")
+		magentLog.WithError(err).Error("failed to get contaienr type")
 		return false
 	}
 
@@ -49,7 +51,7 @@ func isSandboxContainer(c *containers.Container) bool {
 }
 
 // getSandboxes get kata sandbox from containerd.
-// this should not be called too frequently
+// this will be called only after magent start.
 func (ma *MAgent) getSandboxes() (map[string]string, error) {
 	client, err := containerd.New(ma.containerdAddr)
 	if err != nil {
@@ -73,8 +75,9 @@ func (ma *MAgent) getSandboxes() (map[string]string, error) {
 		initSandboxByNamespaceFunc := func(namespace string) error {
 			ctx := context.Background()
 			namespacedCtx := namespaces.WithNamespace(ctx, namespace)
-			// only listup kata contaienrs pods/containers
-			containers, err := client.ContainerService().List(namespacedCtx, "runtime.name=="+kataRuntimeName)
+			// only list Kata Containers pods/containers
+			containers, err := client.ContainerService().List(namespacedCtx,
+				"runtime.name=="+types.KataRuntimeName+`,labels."io.cri-containerd.kind"==sandbox`)
 			if err != nil {
 				return err
 			}
@@ -82,7 +85,7 @@ func (ma *MAgent) getSandboxes() (map[string]string, error) {
 			for i := range containers {
 				c := containers[i]
 				isc := isSandboxContainer(&c)
-				logrus.Debugf("container %s is sandbox container?: %t", c.ID, isc)
+				magentLog.WithFields(logrus.Fields{"container": c.ID, "result": isc}).Debug("is this a sandbox container?")
 				if isc {
 					sandboxMap[c.ID] = namespace
 				}

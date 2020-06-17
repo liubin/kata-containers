@@ -481,7 +481,7 @@ fn set_gauge_vec_proc_io(gv: &prometheus::GaugeVec, io_stat: &procfs::process::I
         .set(io_stat.read_bytes as f64);
     gv.with_label_values(&["write_bytes"])
         .set(io_stat.write_bytes as f64);
-    gv.with_label_values(&["cancelled_write_bytes]"])
+    gv.with_label_values(&["cancelled_write_bytes"])
         .set(io_stat.cancelled_write_bytes as f64);
 }
 

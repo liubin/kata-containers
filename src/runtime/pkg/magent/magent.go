@@ -12,10 +12,19 @@ import (
 
 	"github.com/containerd/containerd/defaults"
 	srvconfig "github.com/containerd/containerd/services/server/config"
+	"github.com/sirupsen/logrus"
 
 	// register grpc event types
 	_ "github.com/containerd/containerd/api/events"
 )
+
+var magentLog = logrus.WithField("source", "magent")
+
+// SetLogger sets the logger for magent package.
+func SetLogger(logger *logrus.Entry) {
+	fields := magentLog.Data
+	magentLog = logger.WithFields(fields)
+}
 
 // MAgent is management agent
 type MAgent struct {
@@ -54,7 +63,7 @@ func NewMAgent(containerdAddr, containerdConfigFile string) (*MAgent, error) {
 	}
 
 	// register metrics
-	regMetrics()
+	registerMetrics()
 
 	go ma.sandboxCache.startEventsListener(ma.containerdAddr)
 

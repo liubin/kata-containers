@@ -130,10 +130,10 @@ func (s *service) startManagementServer(ctx context.Context) {
 	http.HandleFunc("/metrics", s.serveMetrics)
 
 	// register shim metrics
-	regMetrics()
+	registerMetrics()
 
 	// register sandbox metrics
-	vc.RegMetrics()
+	vc.RegisterMetrics()
 
 	// start serve
 	svr := &http.Server{Handler: http.DefaultServeMux}

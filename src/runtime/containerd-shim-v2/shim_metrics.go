@@ -16,7 +16,7 @@ const namespaceKatashim = "kata_shim"
 var (
 	rpcDurationsHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: namespaceKatashim,
-		Name:      "rpc_durations_histogram_million_seconds",
+		Name:      "rpc_durations_histogram_milliseconds",
 		Help:      "RPC latency distributions.",
 		Buckets:   prometheus.ExponentialBuckets(1, 2, 10),
 	},
@@ -68,7 +68,7 @@ var (
 	})
 )
 
-func regMetrics() {
+func registerMetrics() {
 	prometheus.MustRegister(rpcDurationsHistogram)
 	prometheus.MustRegister(katashimThreads)
 	prometheus.MustRegister(katashimProcStatus)
