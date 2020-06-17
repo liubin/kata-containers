@@ -6,10 +6,7 @@
 package utils
 
 import (
-	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -33,15 +30,4 @@ func GzipAccepted(header http.Header) bool {
 // String2Pointer make a string to a pointer to string
 func String2Pointer(s string) *string {
 	return &s
-}
-
-// EnsureFileDir will check if file a in an absolute format and ensure the directory is exits
-// if not, make the dir like `mkdir -p`
-func EnsureFileDir(file string) error {
-	if !filepath.IsAbs(file) {
-		return fmt.Errorf("file must be an absolute path")
-	}
-
-	path := filepath.Dir(file)
-	return os.MkdirAll(path, 0755)
 }
