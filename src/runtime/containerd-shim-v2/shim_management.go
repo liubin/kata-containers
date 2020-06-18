@@ -67,8 +67,18 @@ func (s *service) serveMetrics(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// decode and parse metrics from agent
+	list := decodeAgentMetrics(agentMetrics)
+
+	// encode the metrics to output
+	for _, mf := range list {
+		encoder.Encode(mf)
+	}
+}
+
+func decodeAgentMetrics(body string) []*dto.MetricFamily {
 	// decode agent metrics
-	reader := strings.NewReader(agentMetrics)
+	reader := strings.NewReader(body)
 	decoder := expfmt.NewDecoder(reader, expfmt.FmtText)
 	list := make([]*dto.MetricFamily, 0)
 
@@ -79,29 +89,19 @@ func (s *service) serveMetrics(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 		} else {
+			// metrics collected by prometheus(prefixed by go_ and process_ ) will to add a prefix to
+			// to avoid an naming conflicts
+			// this will only has effect for go version agent(Kata 1.x).
+			// And rust agent will create metrics for processes with the prefix "process_"
+			if mf.Name != nil && (strings.HasPrefix(*mf.Name, "go_") || strings.HasPrefix(*mf.Name, "process_")) {
+				mf.Name = mutils.String2Pointer("kata_agent_" + *mf.Name)
+			}
+
 			list = append(list, mf)
 		}
 	}
 
-	// do some process for metrics from agent, and then re-encode it again
-	newList := make([]*dto.MetricFamily, len(list))
-
-	for i := range list {
-		m := list[i]
-		// metrics collected by prometheus(prefixed by go_ and process_ ) will to add a prefix to
-		// to avoid an naming conflicts
-		// this will only has effect for go version agent(Kata 1.x).
-		// And rust agent will create metrics for processes with the prefix "process_"
-		if m.Name != nil && (strings.HasPrefix(*m.Name, "go_") || strings.HasPrefix(*m.Name, "process_")) {
-			m.Name = mutils.String2Pointer("kata_agent_" + *m.Name)
-		}
-		newList[i] = m
-	}
-
-	// encode the metrics to output
-	for _, mf := range newList {
-		encoder.Encode(mf)
-	}
+	return list
 }
 
 func (s *service) startManagementServer(ctx context.Context) {

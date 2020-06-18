@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -125,6 +126,19 @@ func (ma *MAgent) ProcessMetricsRequest(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// encode metric gathered in current process
+	if err := encodeMetricFamily(mfs, encoder); err != nil {
+		magentLog.WithError(err).Warnf("failed to encode metrics")
+	}
+
+	// aggregate sandboxes metrics and write to response by encoder
+	if err := ma.aggregateSandboxMetrics(encoder); err != nil {
+		magentLog.WithError(err).Errorf("failed aggregateSandboxMetrics")
+		scrapeFailedCount.Inc()
+	}
+}
+
+func encodeMetricFamily(mfs []*dto.MetricFamily, encoder expfmt.Encoder) error {
 	for i := range mfs {
 		metricFamily := mfs[i]
 
@@ -134,15 +148,10 @@ func (ma *MAgent) ProcessMetricsRequest(w http.ResponseWriter, r *http.Request) 
 
 		// encode and write to output
 		if err := encoder.Encode(metricFamily); err != nil {
-			magentLog.WithError(err).Warnf("failed to encode metrics")
+			return err
 		}
 	}
-
-	// aggregate sandboxes metrics and write to response by encoder
-	if err := ma.aggregateSandboxMetrics(encoder); err != nil {
-		magentLog.WithError(err).Errorf("failed aggregateSandboxMetrics")
-		scrapeFailedCount.Inc()
-	}
+	return nil
 }
 
 // aggregateSandboxMetrics will get metrics from one sandbox and do some process
@@ -259,6 +268,12 @@ func (ma *MAgent) getSandboxMetrics(sandboxID, namespace string) ([]*dto.MetricF
 		return nil, err
 	}
 
+	return parsePrometheusMetrics(sandboxID, body)
+}
+
+// parsePrometheusMetrics will decode metrics from Prometheus text format
+// and return array of *dto.MetricFamily with an ASC order
+func parsePrometheusMetrics(sandboxID string, body []byte) ([]*dto.MetricFamily, error) {
 	reader := bytes.NewReader(body)
 	decoder := expfmt.NewDecoder(reader, expfmt.FmtText)
 
@@ -289,6 +304,12 @@ func (ma *MAgent) getSandboxMetrics(sandboxID, namespace string) ([]*dto.MetricF
 
 		list = append(list, mf)
 	}
+
+	// sort ASC
+	sort.SliceStable(list, func(i, j int) bool {
+		b := strings.Compare(*list[i].Name, *list[j].Name)
+		return b < 0
+	})
 
 	return list, nil
 }

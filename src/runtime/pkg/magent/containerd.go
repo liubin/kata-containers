@@ -30,6 +30,11 @@ func getContainer(containersClient containers.Store, namespace, cid string) (con
 // isSandboxContainer return true if the container is a sandbox container.
 func isSandboxContainer(c *containers.Container) bool {
 	// unmarshal from any to spec.
+	if c.Spec == nil {
+		magentLog.WithField("container", c.ID).Error("container spec is nil")
+		return false
+	}
+
 	v, err := typeurl.UnmarshalAny(c.Spec)
 	if err != nil {
 		magentLog.WithError(err).Error("failed to Unmarshal container spec")
