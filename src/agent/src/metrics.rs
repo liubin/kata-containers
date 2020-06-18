@@ -463,7 +463,7 @@ fn set_gauge_vec_proc_status(gv: &prometheus::GaugeVec, status: &procfs::process
         .set(status.vmpte.unwrap_or(0) as f64);
     gv.with_label_values(&["vmswap"])
         .set(status.vmswap.unwrap_or(0) as f64);
-    gv.with_label_values(&["hugetblpages"])
+    gv.with_label_values(&["hugetlbpages"])
         .set(status.hugetblpages.unwrap_or(0) as f64);
     gv.with_label_values(&["voluntary_ctxt_switches"])
         .set(status.voluntary_ctxt_switches.unwrap_or(0) as f64);

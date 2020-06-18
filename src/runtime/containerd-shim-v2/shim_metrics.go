@@ -40,7 +40,7 @@ var (
 	katashimProcStat = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespaceKatashim,
 		Name:      "proc_stat",
-		Help:      "Kata containerd shim v2 proc statistics.",
+		Help:      "Kata containerd shim v2 process statistics.",
 	},
 		[]string{"item"},
 	)
