@@ -68,6 +68,7 @@ type Process struct {
 	// Pid is the process ID as seen by the host software
 	// stack, e.g. CRI-O, containerd. This is typically the
 	// shim PID.
+	// FIXME not needed anymore
 	Pid int
 
 	StartTime time.Time
@@ -1050,43 +1051,6 @@ func (c *Container) stop(force bool) error {
 		return err
 	}
 
-	defer func() {
-		span, _ := c.trace("stopShim")
-		defer span.Finish()
-
-		// If shim is still running something went wrong
-		// Make sure we stop the shim process
-		if running, _ := isShimRunning(c.process.Pid); running {
-			l := c.Logger()
-			l.Error("Failed to stop container so stopping dangling shim")
-			if err := stopShim(c.process.Pid); err != nil {
-				l.WithError(err).Warn("failed to stop shim")
-			}
-		}
-
-	}()
-
-	// Here we expect that stop() has been called because the container
-	// process returned or because it received a signal. In case of a
-	// signal, we want to give it some time to end the container process.
-	// However, if the signal didn't reach its goal, the caller still
-	// expects this container to be stopped, that's why we should not
-	// return an error, but instead try to kill it forcefully.
-	if err := waitForShim(c.process.Pid); err != nil {
-		// Force the container to be killed.
-		if err := c.kill(syscall.SIGKILL, true); err != nil && !force {
-			return err
-		}
-
-		// Wait for the end of container process. We expect this call
-		// to succeed. Indeed, we have already given a second chance
-		// to the container by trying to kill it with SIGKILL, there
-		// is no reason to try to go further if we got an error.
-		if err := waitForShim(c.process.Pid); err != nil && !force {
-			return err
-		}
-	}
-
 	// Force the container to be killed. For most of the cases, this
 	// should not matter and it should return an error that will be
 	// ignored.
@@ -1487,20 +1451,7 @@ func (c *Container) cgroupsCreate() (err error) {
 		return fmt.Errorf("Invalid cgroup path: %v", err)
 	}
 
-	cgroup, err := cgroupsNewFunc(cgroups.V1,
-		cgroups.StaticPath(c.state.CgroupPath), &resources)
-	if err != nil {
-		return fmt.Errorf("Could not create cgroup for %v: %v", c.state.CgroupPath, err)
-	}
-
 	c.config.Resources = resources
-
-	// Add shim into cgroup
-	if c.process.Pid > 0 {
-		if err := cgroup.Add(cgroups.Process{Pid: c.process.Pid}); err != nil {
-			return fmt.Errorf("Could not add PID %d to cgroup %v: %v", c.process.Pid, spec.Linux.CgroupsPath, err)
-		}
-	}
 
 	return nil
 }

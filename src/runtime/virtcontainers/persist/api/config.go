@@ -195,13 +195,6 @@ type ProxyConfig struct {
 	Debug bool
 }
 
-// ShimConfig is the structure providing specific configuration
-// for shim implementation.
-type ShimConfig struct {
-	Path  string
-	Debug bool
-}
-
 // NetworkConfig is the network configuration related to a network.
 type NetworkConfig struct {
 	NetNSPath         string
@@ -230,9 +223,6 @@ type SandboxConfig struct {
 
 	ProxyType   string
 	ProxyConfig ProxyConfig
-
-	ShimType       string
-	KataShimConfig *ShimConfig
 
 	NetworkConfig NetworkConfig
 

@@ -32,7 +32,6 @@ import (
 
 var (
 	testProxyVersion      = "proxy version 0.1"
-	testShimVersion       = "shim version 0.1"
 	testNetmonVersion     = "netmon version 0.1"
 	testHypervisorVersion = "QEMU emulator version 2.7.0+git.741f430a96-6.1, Copyright (c) 2003-2016 Fabrice Bellard and the QEMU Project developers"
 )
@@ -43,7 +42,6 @@ var (
 	proxyDebug      = false
 	runtimeDebug    = false
 	runtimeTrace    = false
-	shimDebug       = false
 	netmonDebug     = false
 	agentDebug      = false
 	agentTrace      = false
@@ -86,7 +84,6 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 	imagePath := filepath.Join(prefixDir, "image")
 	kernelParams := "foo=bar xyz"
 	machineType := "machineType"
-	shimPath := filepath.Join(prefixDir, "shim")
 	proxyPath := filepath.Join(prefixDir, "proxy")
 	netmonPath := filepath.Join(prefixDir, "netmon")
 	disableBlock := true
@@ -109,11 +106,6 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		if err != nil {
 			return "", oci.RuntimeConfig{}, err
 		}
-	}
-
-	err = makeVersionBinary(shimPath, testShimVersion)
-	if err != nil {
-		return "", oci.RuntimeConfig{}, err
 	}
 
 	err = makeVersionBinary(proxyPath, testProxyVersion)
@@ -144,7 +136,6 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		ImagePath:            imagePath,
 		KernelParams:         kernelParams,
 		MachineType:          machineType,
-		ShimPath:             shimPath,
 		ProxyPath:            proxyPath,
 		NetmonPath:           netmonPath,
 		LogPath:              logPath,
@@ -163,7 +154,6 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		RuntimeDebug:         runtimeDebug,
 		RuntimeTrace:         runtimeTrace,
 		ProxyDebug:           proxyDebug,
-		ShimDebug:            shimDebug,
 		NetmonDebug:          netmonDebug,
 		AgentDebug:           agentDebug,
 		AgentTrace:           agentTrace,
@@ -201,22 +191,6 @@ func getExpectedNetmonDetails(config oci.RuntimeConfig) (NetmonInfo, error) {
 		Path:    config.NetmonConfig.Path,
 		Debug:   config.NetmonConfig.Debug,
 		Enable:  config.NetmonConfig.Enable,
-	}, nil
-}
-
-func getExpectedShimDetails(config oci.RuntimeConfig) (ShimInfo, error) {
-	shimConfig, ok := config.ShimConfig.(vc.ShimConfig)
-	if !ok {
-		return ShimInfo{}, fmt.Errorf("failed to get shim config")
-	}
-
-	shimPath := shimConfig.Path
-
-	return ShimInfo{
-		Type:    string(config.ShimType),
-		Version: constructVersionInfo(testShimVersion),
-		Path:    shimPath,
-		Debug:   shimConfig.Debug,
 	}, nil
 }
 
@@ -383,11 +357,6 @@ func getExpectedSettings(config oci.RuntimeConfig, tmpdir, configFile string) (E
 		return EnvInfo{}, err
 	}
 
-	shim, err := getExpectedShimDetails(config)
-	if err != nil {
-		return EnvInfo{}, err
-	}
-
 	agent, err := getExpectedAgentDetails(config)
 	if err != nil {
 		return EnvInfo{}, err
@@ -414,7 +383,6 @@ func getExpectedSettings(config oci.RuntimeConfig, tmpdir, configFile string) (E
 		Image:      image,
 		Kernel:     kernel,
 		Proxy:      proxy,
-		Shim:       shim,
 		Agent:      agent,
 		Host:       host,
 		Netmon:     netmon,
@@ -519,7 +487,6 @@ func TestEnvGetEnvInfo(t *testing.T) {
 		proxyDebug = toggle
 		runtimeDebug = toggle
 		runtimeTrace = toggle
-		shimDebug = toggle
 		agentDebug = toggle
 		agentTrace = toggle
 
@@ -558,22 +525,6 @@ func TestEnvGetEnvInfoNoHypervisorVersion(t *testing.T) {
 	assert.NoError(err)
 
 	assert.Equal(expectedEnv, env)
-}
-
-func TestEnvGetEnvInfoShimError(t *testing.T) {
-	assert := assert.New(t)
-
-	tmpdir, err := ioutil.TempDir("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
-
-	configFile, config, err := makeRuntimeConfig(tmpdir)
-	assert.NoError(err)
-
-	config.ShimConfig = "invalid shim config"
-
-	_, err = getEnvInfo(configFile, config)
-	assert.Error(err)
 }
 
 func TestEnvGetEnvInfoAgentError(t *testing.T) {
@@ -753,64 +704,6 @@ func TestEnvGetNetmonInfoNoVersion(t *testing.T) {
 	assert.Equal(t, expectedNetmon, netmon)
 }
 
-func TestEnvGetShimInfo(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tmpdir)
-
-	_, config, err := makeRuntimeConfig(tmpdir)
-	assert.NoError(t, err)
-
-	expectedShim, err := getExpectedShimDetails(config)
-	assert.NoError(t, err)
-
-	shim, err := getShimInfo(config)
-	assert.NoError(t, err)
-
-	assert.Equal(t, expectedShim, shim)
-}
-
-func TestEnvGetShimInfoNoVersion(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tmpdir)
-
-	_, config, err := makeRuntimeConfig(tmpdir)
-	assert.NoError(t, err)
-
-	expectedShim, err := getExpectedShimDetails(config)
-	assert.NoError(t, err)
-
-	expectedShim.Version = unknownVersionInfo
-
-	shim, err := getShimInfo(config)
-	assert.NoError(t, err)
-
-	assert.Equal(t, expectedShim, shim)
-}
-
-func TestEnvGetShimInfoInvalidType(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tmpdir)
-
-	_, config, err := makeRuntimeConfig(tmpdir)
-	assert.NoError(t, err)
-
-	_, err = getExpectedShimDetails(config)
-	assert.NoError(t, err)
-
-	config.ShimConfig = "foo"
-	_, err = getShimInfo(config)
-	assert.Error(t, err)
-}
-
 func TestEnvGetAgentInfo(t *testing.T) {
 	tmpdir, err := ioutil.TempDir("", "")
 	if err != nil {
@@ -878,12 +771,6 @@ func testEnvShowTOMLSettings(t *testing.T, tmpdir string, tmpfile *os.File) erro
 		Debug:   false,
 	}
 
-	shim := ShimInfo{
-		Type:    "shim-type",
-		Version: constructVersionInfo(testShimVersion),
-		Path:    "/resolved/shim/path",
-	}
-
 	agent := AgentInfo{
 		Type: "agent-type",
 	}
@@ -897,7 +784,6 @@ func testEnvShowTOMLSettings(t *testing.T, tmpdir string, tmpfile *os.File) erro
 		Image:      image,
 		Kernel:     kernel,
 		Proxy:      proxy,
-		Shim:       shim,
 		Agent:      agent,
 		Host:       expectedHostDetails,
 	}
@@ -947,12 +833,6 @@ func testEnvShowJSONSettings(t *testing.T, tmpdir string, tmpfile *os.File) erro
 		Debug:   false,
 	}
 
-	shim := ShimInfo{
-		Type:    "shim-type",
-		Version: constructVersionInfo(testShimVersion),
-		Path:    "/resolved/shim/path",
-	}
-
 	agent := AgentInfo{
 		Type: "agent-type",
 	}
@@ -966,7 +846,6 @@ func testEnvShowJSONSettings(t *testing.T, tmpdir string, tmpfile *os.File) erro
 		Image:      image,
 		Kernel:     kernel,
 		Proxy:      proxy,
-		Shim:       shim,
 		Agent:      agent,
 		Host:       expectedHostDetails,
 	}
@@ -1068,34 +947,6 @@ func TestEnvHandleSettings(t *testing.T) {
 
 	_, err = toml.DecodeFile(tmpfile.Name(), &env)
 	assert.NoError(t, err)
-}
-
-func TestEnvHandleSettingsInvalidShimConfig(t *testing.T) {
-	assert := assert.New(t)
-
-	tmpdir, err := ioutil.TempDir("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
-
-	configFile, config, err := makeRuntimeConfig(tmpdir)
-	assert.NoError(err)
-
-	_, err = getExpectedSettings(config, tmpdir, configFile)
-	assert.NoError(err)
-
-	config.ShimConfig = "invalid shim config"
-
-	ctx := createCLIContext(nil)
-	ctx.App.Name = "foo"
-	ctx.App.Metadata["configFile"] = configFile
-	ctx.App.Metadata["runtimeConfig"] = config
-
-	tmpfile, err := ioutil.TempFile("", "")
-	assert.NoError(err)
-	defer os.Remove(tmpfile.Name())
-
-	err = handleSettings(tmpfile, ctx)
-	assert.Error(err)
 }
 
 func TestEnvHandleSettingsInvalidParams(t *testing.T) {

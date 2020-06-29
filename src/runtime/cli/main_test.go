@@ -243,7 +243,6 @@ func newTestRuntimeConfig(dir string, create bool) (oci.RuntimeConfig, error) {
 		HypervisorConfig: hypervisorConfig,
 		AgentType:        vc.KataContainersAgent,
 		ProxyType:        vc.KataProxyType,
-		ShimType:         vc.KataShimType,
 		Console:          "",
 	}, nil
 }
