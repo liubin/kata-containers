@@ -28,8 +28,8 @@ const (
 )
 
 var (
-	defaultProxy = vc.KataProxyType
-	defaultShim  = vc.KataShimType
+	defaultProxy = vc.KataBuiltInProxyType
+	defaultShim  = vc.KataBuiltInShimType
 
 	// if true, enable opentracing support.
 	tracing = false
@@ -873,99 +873,35 @@ func updateRuntimeConfigHypervisor(configPath string, tomlConf tomlConfig, confi
 	return nil
 }
 
-func updateRuntimeConfigProxy(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig, builtIn bool) error {
-	if builtIn {
-		config.ProxyType = vc.KataBuiltInProxyType
-		config.ProxyConfig = vc.ProxyConfig{
-			Debug: config.Debug,
-		}
-		return nil
+func updateRuntimeConfigProxy(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
+	config.ProxyType = vc.KataBuiltInProxyType
+	config.ProxyConfig = vc.ProxyConfig{
+		Debug: config.Debug,
 	}
+	return nil
+}
 
-	for k, proxy := range tomlConf.Proxy {
-		switch k {
-		case kataProxyTableType:
-			config.ProxyType = vc.KataProxyType
-		default:
-			return fmt.Errorf("%s proxy type not supported", k)
-		}
+func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
+	var agentConfig vc.KataAgentConfig
 
-		path, err := proxy.path()
-		if err != nil {
-			return err
-		}
+	// If the agent config section isn't a Kata one, just default
+	// to everything being disabled.
+	agentConfig, _ = config.AgentConfig.(vc.KataAgentConfig)
 
-		config.ProxyConfig = vc.ProxyConfig{
-			Path:  path,
-			Debug: proxy.debug(),
-		}
+	config.AgentType = vc.KataContainersAgent
+	config.AgentConfig = vc.KataAgentConfig{
+		LongLiveConn:  true,
+		UseVSock:      config.HypervisorConfig.UseVSock,
+		Debug:         agentConfig.Debug,
+		KernelModules: agentConfig.KernelModules,
 	}
 
 	return nil
 }
 
-func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig, builtIn bool) error {
-	if builtIn {
-		var agentConfig vc.KataAgentConfig
-
-		// If the agent config section isn't a Kata one, just default
-		// to everything being disabled.
-		agentConfig, _ = config.AgentConfig.(vc.KataAgentConfig)
-
-		config.AgentType = vc.KataContainersAgent
-		config.AgentConfig = vc.KataAgentConfig{
-			LongLiveConn:  true,
-			UseVSock:      config.HypervisorConfig.UseVSock,
-			Debug:         agentConfig.Debug,
-			KernelModules: agentConfig.KernelModules,
-		}
-
-		return nil
-	}
-
-	for k, agent := range tomlConf.Agent {
-		switch k {
-		case kataAgentTableType:
-			config.AgentType = vc.KataContainersAgent
-			config.AgentConfig = vc.KataAgentConfig{
-				UseVSock:      config.HypervisorConfig.UseVSock,
-				Debug:         agent.debug(),
-				Trace:         agent.trace(),
-				TraceMode:     agent.traceMode(),
-				TraceType:     agent.traceType(),
-				KernelModules: agent.kernelModules(),
-			}
-		default:
-			return fmt.Errorf("%s agent type is not supported", k)
-		}
-	}
-
-	return nil
-}
-
-func updateRuntimeConfigShim(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig, builtIn bool) error {
-	if builtIn {
-		config.ShimType = vc.KataBuiltInShimType
-		config.ShimConfig = vc.ShimConfig{}
-		return nil
-	}
-
-	for k, shim := range tomlConf.Shim {
-		switch k {
-		case kataShimTableType:
-			config.ShimType = vc.KataShimType
-		default:
-			return fmt.Errorf("%s shim is not supported", k)
-		}
-
-		shConfig, err := newShimConfig(shim)
-		if err != nil {
-			return fmt.Errorf("%v: %v", configPath, err)
-		}
-
-		config.ShimConfig = shConfig
-	}
-
+func updateRuntimeConfigShim(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
+	config.ShimType = vc.KataBuiltInShimType
+	config.ShimConfig = vc.ShimConfig{}
 	return nil
 }
 
@@ -1030,20 +966,20 @@ func SetKernelParams(runtimeConfig *oci.RuntimeConfig) error {
 	return nil
 }
 
-func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig, builtIn bool) error {
+func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
 	if err := updateRuntimeConfigHypervisor(configPath, tomlConf, config); err != nil {
 		return err
 	}
 
-	if err := updateRuntimeConfigProxy(configPath, tomlConf, config, builtIn); err != nil {
+	if err := updateRuntimeConfigProxy(configPath, tomlConf, config); err != nil {
 		return err
 	}
 
-	if err := updateRuntimeConfigAgent(configPath, tomlConf, config, builtIn); err != nil {
+	if err := updateRuntimeConfigAgent(configPath, tomlConf, config); err != nil {
 		return err
 	}
 
-	if err := updateRuntimeConfigShim(configPath, tomlConf, config, builtIn); err != nil {
+	if err := updateRuntimeConfigShim(configPath, tomlConf, config); err != nil {
 		return err
 	}
 
@@ -1135,7 +1071,7 @@ func initConfig() (config oci.RuntimeConfig, err error) {
 //
 // All paths are resolved fully meaning if this function does not return an
 // error, all paths are valid at the time of the call.
-func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolvedConfigPath string, config oci.RuntimeConfig, err error) {
+func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPath string, config oci.RuntimeConfig, err error) {
 
 	config, err = initConfig()
 	if err != nil {
@@ -1177,7 +1113,7 @@ func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolved
 			}).Info("loaded configuration")
 	}
 
-	if err := updateRuntimeConfig(resolved, tomlConf, &config, builtIn); err != nil {
+	if err := updateRuntimeConfig(resolved, tomlConf, &config); err != nil {
 		return "", config, err
 	}
 

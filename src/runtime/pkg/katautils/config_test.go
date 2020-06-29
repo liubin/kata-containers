@@ -171,15 +171,11 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		VirtioFSCache:         defaultVirtioFSCacheMode,
 	}
 
-	agentConfig := vc.KataAgentConfig{}
+	agentConfig := vc.KataAgentConfig{LongLiveConn: true}
 
-	proxyConfig := vc.ProxyConfig{
-		Path: proxyPath,
-	}
+	proxyConfig := vc.ProxyConfig{}
 
-	shimConfig := vc.ShimConfig{
-		Path: shimPath,
-	}
+	shimConfig := vc.ShimConfig{}
 
 	netmonConfig := vc.NetmonConfig{
 		Path:   netmonPath,
@@ -264,7 +260,7 @@ func testLoadConfiguration(t *testing.T, dir string,
 					assert.NoError(t, err)
 				}
 
-				resolvedConfigPath, config, err := LoadConfiguration(file, ignoreLogging, false)
+				resolvedConfigPath, config, err := LoadConfiguration(file, ignoreLogging)
 				if expectFail {
 					assert.Error(t, err)
 
@@ -283,7 +279,7 @@ func testLoadConfiguration(t *testing.T, dir string,
 				assert.Equal(t, defaultRuntimeConfiguration, resolvedConfigPath)
 				result := reflect.DeepEqual(config, testConfig.RuntimeConfig)
 				if !result {
-					t.Fatalf("Expected\n%+v\nGot\n%+v", config, testConfig.RuntimeConfig)
+					t.Fatalf("Expected\n%+v\nGot\n%+v", testConfig.RuntimeConfig, config)
 				}
 				assert.True(t, result)
 
@@ -400,28 +396,6 @@ func TestConfigLoadConfigurationFailMissingKernel(t *testing.T) {
 			expectFail := true
 
 			err = os.Remove(config.RuntimeConfig.HypervisorConfig.KernelPath)
-			if err != nil {
-				return expectFail, err
-			}
-
-			return expectFail, nil
-		})
-}
-
-func TestConfigLoadConfigurationFailMissingShim(t *testing.T) {
-	tmpdir, err := ioutil.TempDir(testDir, "runtime-config-")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpdir)
-
-	testLoadConfiguration(t, tmpdir,
-		func(config testRuntimeConfig, configFile string, ignoreLogging bool) (bool, error) {
-			expectFail := true
-
-			shimConfig, ok := config.RuntimeConfig.ShimConfig.(vc.ShimConfig)
-			if !ok {
-				return expectFail, fmt.Errorf("cannot determine shim config")
-			}
-			err = os.Remove(shimConfig.Path)
 			if err != nil {
 				return expectFail, err
 			}
@@ -578,10 +552,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, config, err := LoadConfiguration(configPath, false, false)
-	if err == nil {
-		t.Fatalf("Expected loadConfiguration to fail as shim path does not exist: %+v", config)
-	}
+	_, config, _ := LoadConfiguration(configPath, false)
 
 	err = createEmptyFile(shimPath)
 	if err != nil {
@@ -608,7 +579,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		t.Error(err)
 	}
 
-	_, config, err = LoadConfiguration(configPath, false, false)
+	_, config, err = LoadConfiguration(configPath, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -633,15 +604,11 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		VirtioFSCache:         defaultVirtioFSCacheMode,
 	}
 
-	expectedAgentConfig := vc.KataAgentConfig{}
+	expectedAgentConfig := vc.KataAgentConfig{LongLiveConn: true}
 
-	expectedProxyConfig := vc.ProxyConfig{
-		Path: proxyPath,
-	}
+	expectedProxyConfig := vc.ProxyConfig{}
 
-	expectedShimConfig := vc.ShimConfig{
-		Path: shimPath,
-	}
+	expectedShimConfig := vc.ShimConfig{}
 
 	expectedNetmonConfig := vc.NetmonConfig{
 		Path:   netmonPath,
@@ -748,7 +715,7 @@ func TestMinimalRuntimeConfigWithVsock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, config, err := LoadConfiguration(configPath, false, false)
+	_, config, err := LoadConfiguration(configPath, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1508,11 +1475,12 @@ func TestUpdateRuntimeConfiguration(t *testing.T) {
 	assert.NotEqual(config.AgentType, vc.AgentType(kataAgentTableType))
 	assert.NotEqual(config.AgentConfig, vc.KataAgentConfig{})
 
-	err := updateRuntimeConfig("", tomlConf, &config, false)
+	err := updateRuntimeConfig("", tomlConf, &config)
 	assert.NoError(err)
 
 	assert.Equal(config.AgentType, vc.AgentType(kataAgentTableType))
-	assert.Equal(config.AgentConfig, vc.KataAgentConfig{})
+
+	assert.Equal(config.AgentConfig, vc.KataAgentConfig{LongLiveConn: true})
 }
 
 func TestUpdateRuntimeConfigurationVMConfig(t *testing.T) {
@@ -1537,7 +1505,7 @@ func TestUpdateRuntimeConfigurationVMConfig(t *testing.T) {
 		},
 	}
 
-	err := updateRuntimeConfig("", tomlConf, &config, false)
+	err := updateRuntimeConfig("", tomlConf, &config)
 	assert.NoError(err)
 
 	assert.Equal(expectedVMConfig, config.HypervisorConfig.MemorySize)
@@ -1555,7 +1523,7 @@ func TestUpdateRuntimeConfigurationFactoryConfig(t *testing.T) {
 
 	tomlConf := tomlConfig{Factory: factory{Template: true}}
 
-	err := updateRuntimeConfig("", tomlConf, &config, false)
+	err := updateRuntimeConfig("", tomlConf, &config)
 	assert.NoError(err)
 
 	assert.Equal(expectedFactoryConfig, config.FactoryConfig)
@@ -1584,7 +1552,7 @@ func TestUpdateRuntimeConfigurationInvalidKernelParams(t *testing.T) {
 		}
 	}
 
-	err := updateRuntimeConfig("", tomlConf, &config, false)
+	err := updateRuntimeConfig("", tomlConf, &config)
 	assert.EqualError(err, "Empty kernel parameter")
 }
 

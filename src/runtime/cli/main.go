@@ -318,7 +318,7 @@ func beforeSubcommands(c *cli.Context) error {
 		}
 	}
 
-	configFile, runtimeConfig, err = katautils.LoadConfiguration(c.GlobalString(configFilePathOption), ignoreConfigLogs, false)
+	configFile, runtimeConfig, err = katautils.LoadConfiguration(c.GlobalString(configFilePathOption), ignoreConfigLogs)
 	if err != nil {
 		fatal(err)
 	}

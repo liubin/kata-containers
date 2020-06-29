@@ -178,7 +178,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		return "", oci.RuntimeConfig{}, err
 	}
 
-	_, config, err = katautils.LoadConfiguration(configFile, true, false)
+	_, config, err = katautils.LoadConfiguration(configFile, true)
 	if err != nil {
 		return "", oci.RuntimeConfig{}, err
 	}
@@ -701,10 +701,6 @@ func TestEnvGetProxyInfoNoVersion(t *testing.T) {
 	expectedProxy, err := getExpectedProxyDetails(config)
 	assert.NoError(t, err)
 
-	// remove the proxy ensuring its version cannot be queried
-	err = os.Remove(config.ProxyConfig.Path)
-	assert.NoError(t, err)
-
 	expectedProxy.Version = unknownVersionInfo
 
 	proxy := getProxyInfo(config)
@@ -787,13 +783,6 @@ func TestEnvGetShimInfoNoVersion(t *testing.T) {
 	assert.NoError(t, err)
 
 	expectedShim, err := getExpectedShimDetails(config)
-	assert.NoError(t, err)
-
-	shimPath := expectedShim.Path
-
-	// ensure querying the shim version fails
-	err = createFile(shimPath, `#!/bin/sh
-	exit 1`)
 	assert.NoError(t, err)
 
 	expectedShim.Version = unknownVersionInfo
