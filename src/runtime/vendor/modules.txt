@@ -39,19 +39,65 @@ github.com/containerd/cgroups
 # github.com/containerd/console v0.0.0-20191206165004-02ecf6a7291e
 github.com/containerd/console
 # github.com/containerd/containerd v1.2.1-0.20181210191522-f05672357f56
+github.com/containerd/containerd
 github.com/containerd/containerd/api/events
+github.com/containerd/containerd/api/services/containers/v1
+github.com/containerd/containerd/api/services/content/v1
+github.com/containerd/containerd/api/services/diff/v1
+github.com/containerd/containerd/api/services/events/v1
+github.com/containerd/containerd/api/services/images/v1
+github.com/containerd/containerd/api/services/introspection/v1
+github.com/containerd/containerd/api/services/leases/v1
+github.com/containerd/containerd/api/services/namespaces/v1
+github.com/containerd/containerd/api/services/snapshots/v1
+github.com/containerd/containerd/api/services/tasks/v1
+github.com/containerd/containerd/api/services/version/v1
 github.com/containerd/containerd/api/types
 github.com/containerd/containerd/api/types/task
+github.com/containerd/containerd/archive
+github.com/containerd/containerd/archive/compression
+github.com/containerd/containerd/cio
+github.com/containerd/containerd/containers
+github.com/containerd/containerd/content
+github.com/containerd/containerd/content/proxy
+github.com/containerd/containerd/defaults
+github.com/containerd/containerd/diff
 github.com/containerd/containerd/errdefs
 github.com/containerd/containerd/events
+github.com/containerd/containerd/events/exchange
+github.com/containerd/containerd/filters
+github.com/containerd/containerd/identifiers
+github.com/containerd/containerd/images
+github.com/containerd/containerd/images/archive
+github.com/containerd/containerd/leases
+github.com/containerd/containerd/leases/proxy
 github.com/containerd/containerd/log
 github.com/containerd/containerd/mount
 github.com/containerd/containerd/namespaces
+github.com/containerd/containerd/oci
+github.com/containerd/containerd/pkg/dialer
+github.com/containerd/containerd/platforms
+github.com/containerd/containerd/plugin
+github.com/containerd/containerd/reference
+github.com/containerd/containerd/remotes
+github.com/containerd/containerd/remotes/docker
+github.com/containerd/containerd/remotes/docker/schema1
+github.com/containerd/containerd/rootfs
 github.com/containerd/containerd/runtime
 github.com/containerd/containerd/runtime/linux/runctypes
+github.com/containerd/containerd/runtime/v2/runc/options
 github.com/containerd/containerd/runtime/v2/shim
 github.com/containerd/containerd/runtime/v2/task
+github.com/containerd/containerd/services/server/config
+github.com/containerd/containerd/snapshots
+github.com/containerd/containerd/snapshots/proxy
 github.com/containerd/containerd/sys
+github.com/containerd/containerd/version
+# github.com/containerd/continuity v0.0.0-20200413184840-d3ef23f19fbb
+github.com/containerd/continuity/fs
+github.com/containerd/continuity/sysx
+# github.com/containerd/cri v1.11.1
+github.com/containerd/cri/pkg/util
 # github.com/containerd/cri-containerd v1.11.1-0.20190125013620-4dd6735020f5
 github.com/containerd/cri-containerd/pkg/annotations
 github.com/containerd/cri-containerd/pkg/api/runtimeoptions/v1
@@ -80,6 +126,14 @@ github.com/cri-o/cri-o/pkg/annotations
 github.com/davecgh/go-spew/spew
 # github.com/dlespiau/covertool v0.0.0-20180314162135-b0c4c6d0583a
 github.com/dlespiau/covertool/pkg/cover
+# github.com/docker/distribution v2.7.1+incompatible
+github.com/docker/distribution/digestset
+github.com/docker/distribution/reference
+# github.com/docker/docker v1.13.1
+github.com/docker/docker/pkg/random
+github.com/docker/docker/pkg/stringid
+# github.com/docker/go-events v0.0.0-20190806004212-e31b211e4f1c
+github.com/docker/go-events
 # github.com/docker/go-units v0.3.3
 github.com/docker/go-units
 # github.com/globalsign/mgo v0.0.0-20181015135952-eeefdecb41b8
@@ -117,6 +171,8 @@ github.com/go-openapi/swag
 github.com/go-openapi/validate
 # github.com/godbus/dbus v0.0.0-20180201030542-885f9cc04c9c
 github.com/godbus/dbus
+# github.com/gogo/googleapis v1.4.0
+github.com/gogo/googleapis/google/rpc
 # github.com/gogo/protobuf v1.3.1
 github.com/gogo/protobuf/gogoproto
 github.com/gogo/protobuf/jsonpb
@@ -152,6 +208,10 @@ github.com/mdlayher/vsock
 github.com/mitchellh/mapstructure
 # github.com/opencontainers/go-digest v1.0.0-rc1
 github.com/opencontainers/go-digest
+# github.com/opencontainers/image-spec v1.0.1
+github.com/opencontainers/image-spec/identity
+github.com/opencontainers/image-spec/specs-go
+github.com/opencontainers/image-spec/specs-go/v1
 # github.com/opencontainers/runc v1.0.0-rc9.0.20200102164712-2b52db75279c
 github.com/opencontainers/runc/libcontainer/cgroups
 github.com/opencontainers/runc/libcontainer/cgroups/ebpf
@@ -199,6 +259,8 @@ github.com/sirupsen/logrus
 github.com/sirupsen/logrus/hooks/syslog
 # github.com/stretchr/testify v1.4.0
 github.com/stretchr/testify/assert
+# github.com/syndtr/gocapability v0.0.0-20180916011248-d98352740cb2
+github.com/syndtr/gocapability/capability
 # github.com/uber/jaeger-client-go v0.0.0-20200422204034-e1cd868603cb
 github.com/uber/jaeger-client-go
 github.com/uber/jaeger-client-go/config
@@ -241,6 +303,8 @@ golang.org/x/net/trace
 # golang.org/x/oauth2 v0.0.0-20191122200657-5d9234df094c
 golang.org/x/oauth2
 golang.org/x/oauth2/internal
+# golang.org/x/sync v0.0.0-20190423024810-112230192c58
+golang.org/x/sync/errgroup
 # golang.org/x/sys v0.0.0-20200420163511-1957bb5e6d1f
 golang.org/x/sys/unix
 golang.org/x/sys/windows
@@ -276,6 +340,7 @@ google.golang.org/grpc/credentials/internal
 google.golang.org/grpc/encoding
 google.golang.org/grpc/encoding/proto
 google.golang.org/grpc/grpclog
+google.golang.org/grpc/health/grpc_health_v1
 google.golang.org/grpc/internal
 google.golang.org/grpc/internal/backoff
 google.golang.org/grpc/internal/binarylog
