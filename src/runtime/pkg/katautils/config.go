@@ -29,8 +29,7 @@ const (
 )
 
 var (
-	defaultProxy = vc.KataProxyType
-	defaultShim  = vc.KataShimType
+	defaultShim = vc.KataShimType
 
 	// if true, enable opentracing support.
 	tracing = false
@@ -943,30 +942,10 @@ func updateRuntimeConfigHypervisor(configPath string, tomlConf tomlConfig, confi
 
 func updateRuntimeConfigProxy(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig, builtIn bool) error {
 	if builtIn {
-		config.ProxyType = vc.KataBuiltInProxyType
 		config.ProxyConfig = vc.ProxyConfig{
 			Debug: config.Debug,
 		}
 		return nil
-	}
-
-	for k, proxy := range tomlConf.Proxy {
-		switch k {
-		case kataProxyTableType:
-			config.ProxyType = vc.KataProxyType
-		default:
-			return fmt.Errorf("%s proxy type not supported", k)
-		}
-
-		path, err := proxy.path()
-		if err != nil {
-			return err
-		}
-
-		config.ProxyConfig = vc.ProxyConfig{
-			Path:  path,
-			Debug: proxy.debug(),
-		}
 	}
 
 	return nil
@@ -1192,7 +1171,6 @@ func initConfig() (config oci.RuntimeConfig, err error) {
 		HypervisorConfig: GetDefaultHypervisorConfig(),
 		AgentType:        defaultAgent,
 		AgentConfig:      defaultAgentConfig,
-		ProxyType:        defaultProxy,
 		ShimType:         defaultShim,
 	}
 
@@ -1257,8 +1235,7 @@ func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolved
 
 	// use no proxy if HypervisorConfig.UseVSock is true
 	if config.HypervisorConfig.UseVSock {
-		kataUtilsLogger.Info("VSOCK supported, configure to not use proxy")
-		config.ProxyType = vc.NoProxyType
+		kataUtilsLogger.Info("VSOCK supported, configure to use builtin proxy")
 		config.ProxyConfig = vc.ProxyConfig{Debug: config.Debug}
 	}
 

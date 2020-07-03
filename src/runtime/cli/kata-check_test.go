@@ -19,7 +19,6 @@ import (
 
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
-	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli"
@@ -980,9 +979,6 @@ func TestCheckVersionConsistencyInComponents(t *testing.T) {
 		}
 		_, config, err := makeRuntimeConfig(tmpdir)
 		assert.NoError(t, err)
-		if !d.proxyExist {
-			config.ProxyType = vc.NoProxyType
-		}
 		version = d.runtimeVersion
 		defer func() {
 			version = origVersion

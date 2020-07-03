@@ -25,7 +25,6 @@ func TestNewVM(t *testing.T) {
 	config := VMConfig{
 		HypervisorType: MockHypervisor,
 		AgentType:      NoopAgentType,
-		ProxyType:      NoopProxyType,
 	}
 	hyperConfig := HypervisorConfig{
 		KernelPath: testDir,
@@ -98,27 +97,6 @@ func TestVMConfigValid(t *testing.T) {
 	assert.Nil(err)
 }
 
-func TestSetupProxy(t *testing.T) {
-	assert := assert.New(t)
-
-	config := VMConfig{
-		HypervisorType: MockHypervisor,
-		AgentType:      NoopAgentType,
-	}
-
-	hypervisor := &mockHypervisor{}
-	agent := &noopAgent{}
-
-	// wrong proxy type
-	config.ProxyType = ProxyType("invalidProxyType")
-	_, _, _, err := setupProxy(hypervisor, agent, config, "foobar")
-	assert.NotNil(err)
-
-	config.ProxyType = NoopProxyType
-	_, _, _, err = setupProxy(hypervisor, agent, config, "foobar")
-	assert.Nil(err)
-}
-
 func TestVMConfigGrpc(t *testing.T) {
 	assert := assert.New(t)
 	config := VMConfig{
@@ -126,7 +104,6 @@ func TestVMConfigGrpc(t *testing.T) {
 		HypervisorConfig: newQemuConfig(),
 		AgentType:        KataContainersAgent,
 		AgentConfig:      KataAgentConfig{false, true, false, false, 0, "", "", []string{}},
-		ProxyType:        NoopProxyType,
 	}
 
 	p, err := config.ToGrpc()

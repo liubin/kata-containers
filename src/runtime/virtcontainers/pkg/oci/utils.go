@@ -99,7 +99,6 @@ type RuntimeConfig struct {
 	AgentType   vc.AgentType
 	AgentConfig interface{}
 
-	ProxyType   vc.ProxyType
 	ProxyConfig vc.ProxyConfig
 
 	ShimType   vc.ShimType
@@ -856,7 +855,6 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, c
 		AgentType:   runtime.AgentType,
 		AgentConfig: runtime.AgentConfig,
 
-		ProxyType:   runtime.ProxyType,
 		ProxyConfig: runtime.ProxyConfig,
 
 		ShimType:   runtime.ShimType,

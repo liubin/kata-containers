@@ -237,7 +237,6 @@ type SandboxConfig struct {
 	AgentType       string
 	KataAgentConfig *KataAgentConfig `json:",omitempty"`
 
-	ProxyType   string
 	ProxyConfig ProxyConfig
 
 	ShimType       string

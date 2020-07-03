@@ -72,7 +72,6 @@ func TestMinimalSandboxConfig(t *testing.T) {
 	runtimeConfig := RuntimeConfig{
 		HypervisorType: vc.QemuHypervisor,
 		AgentType:      vc.KataContainersAgent,
-		ProxyType:      vc.KataProxyType,
 		ShimType:       vc.KataShimType,
 		Console:        consolePath,
 	}
@@ -172,7 +171,6 @@ func TestMinimalSandboxConfig(t *testing.T) {
 
 		HypervisorType: vc.QemuHypervisor,
 		AgentType:      vc.KataContainersAgent,
-		ProxyType:      vc.KataProxyType,
 		ShimType:       vc.KataShimType,
 
 		NetworkConfig: expectedNetworkConfig,

@@ -106,10 +106,7 @@ type HypervisorInfo struct {
 
 // ProxyInfo stores proxy details
 type ProxyInfo struct {
-	Type    string
-	Version VersionInfo
-	Path    string
-	Debug   bool
+	Debug bool
 }
 
 // ShimInfo stores shim details
@@ -257,24 +254,9 @@ func getHostInfo() (HostInfo, error) {
 }
 
 func getProxyInfo(config oci.RuntimeConfig) ProxyInfo {
-	if config.ProxyType == vc.NoProxyType {
-		return ProxyInfo{Type: string(config.ProxyType)}
-	}
-
 	proxyConfig := config.ProxyConfig
-
-	var proxyVersionInfo VersionInfo
-	if version, err := getCommandVersion(proxyConfig.Path); err != nil {
-		proxyVersionInfo = unknownVersionInfo
-	} else {
-		proxyVersionInfo = constructVersionInfo(version)
-	}
-
 	proxy := ProxyInfo{
-		Type:    string(config.ProxyType),
-		Version: proxyVersionInfo,
-		Path:    proxyConfig.Path,
-		Debug:   proxyConfig.Debug,
+		Debug: proxyConfig.Debug,
 	}
 
 	return proxy

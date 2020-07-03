@@ -190,10 +190,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 
 func getExpectedProxyDetails(config oci.RuntimeConfig) (ProxyInfo, error) {
 	return ProxyInfo{
-		Type:    string(config.ProxyType),
-		Version: constructVersionInfo(testProxyVersion),
-		Path:    config.ProxyConfig.Path,
-		Debug:   config.ProxyConfig.Debug,
+		Debug: config.ProxyConfig.Debug,
 	}, nil
 }
 

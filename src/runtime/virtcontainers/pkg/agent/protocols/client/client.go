@@ -20,14 +20,15 @@ import (
 
 	"github.com/hashicorp/yamux"
 	"github.com/mdlayher/vsock"
-//	opentracing "github.com/opentracing/opentracing-go"
+
+	//	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
-//	"google.golang.org/grpc"
+	//	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	grpcStatus "google.golang.org/grpc/status"
 
-	agentgrpc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	"github.com/containerd/ttrpc"
+	agentgrpc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 )
 
 const (
@@ -52,8 +53,8 @@ var agentClientLog = logrus.WithFields(agentClientFields)
 // AgentClient is an agent gRPC client connection wrapper for agentgrpc.AgentServiceClient
 type AgentClient struct {
 	AgentServiceClient agentgrpc.AgentServiceService
-	HealthClient agentgrpc.HealthService
-	conn *ttrpc.Client
+	HealthClient       agentgrpc.HealthService
+	conn               *ttrpc.Client
 }
 
 type yamuxSessionStream struct {
@@ -95,50 +96,50 @@ type dialer func(string, time.Duration) (net.Conn, error)
 //   - hvsock://<path>:<port>. Firecracker implements the virtio-vsock device
 //     model, and mediates communication between AF_UNIX sockets (on the host end)
 //     and AF_VSOCK sockets (on the guest end).
-func NewAgentClient(ctx context.Context, sock string, enableYamux bool) (*AgentClient, error) {
+func NewAgentClient(ctx context.Context, sock string) (*AgentClient, error) {
 	grpcAddr, parsedAddr, err := parse(sock)
 	if err != nil {
 		return nil, err
 	}
 
-	       var conn net.Conn
-	       var d dialer
-       d = agentDialer(parsedAddr, enableYamux)
-	       conn, err = d(grpcAddr, defaultDialTimeout)
-	       if err != nil {
-		               return nil, err
-		       }
-/*
-	dialOpts := []grpc.DialOption{grpc.WithInsecure(), grpc.WithBlock()}
-	dialOpts = append(dialOpts, grpc.WithDialer(agentDialer(parsedAddr, enableYamux)))
-
-	var tracer opentracing.Tracer
-
-	span := opentracing.SpanFromContext(ctx)
-
-	// If the context contains a trace span, trace all client comms
-	if span != nil {
-		tracer = span.Tracer()
-
-		dialOpts = append(dialOpts,
-			grpc.WithUnaryInterceptor(otgrpc.OpenTracingClientInterceptor(tracer)))
-		dialOpts = append(dialOpts,
-			grpc.WithStreamInterceptor(otgrpc.OpenTracingStreamClientInterceptor(tracer)))
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, defaultDialTimeout)
-	defer cancel()
-	conn, err := grpc.DialContext(ctx, grpcAddr, dialOpts...)
+	var conn net.Conn
+	var d dialer
+	d = agentDialer(parsedAddr)
+	conn, err = d(grpcAddr, defaultDialTimeout)
 	if err != nil {
 		return nil, err
 	}
-*/
+	/*
+		dialOpts := []grpc.DialOption{grpc.WithInsecure(), grpc.WithBlock()}
+		dialOpts = append(dialOpts, grpc.WithDialer(agentDialer(parsedAddr, enableYamux)))
+
+		var tracer opentracing.Tracer
+
+		span := opentracing.SpanFromContext(ctx)
+
+		// If the context contains a trace span, trace all client comms
+		if span != nil {
+			tracer = span.Tracer()
+
+			dialOpts = append(dialOpts,
+				grpc.WithUnaryInterceptor(otgrpc.OpenTracingClientInterceptor(tracer)))
+			dialOpts = append(dialOpts,
+				grpc.WithStreamInterceptor(otgrpc.OpenTracingStreamClientInterceptor(tracer)))
+		}
+
+		ctx, cancel := context.WithTimeout(ctx, defaultDialTimeout)
+		defer cancel()
+		conn, err := grpc.DialContext(ctx, grpcAddr, dialOpts...)
+		if err != nil {
+			return nil, err
+		}
+	*/
 	client := ttrpc.NewClient(conn)
 
 	return &AgentClient{
-		               AgentServiceClient: agentgrpc.NewAgentServiceClient(client),
-		               HealthClient:       agentgrpc.NewHealthClient(client),
-		               conn:               client,
+		AgentServiceClient: agentgrpc.NewAgentServiceClient(client),
+		HealthClient:       agentgrpc.NewHealthClient(client),
+		conn:               client,
 	}, nil
 }
 
@@ -209,27 +210,7 @@ func parse(sock string) (string, *url.URL, error) {
 	return grpcAddr, addr, nil
 }
 
-// This function is meant to run in a go routine since it will send ping
-// commands every second. It behaves as a heartbeat to maintain a proper
-// communication state with the Yamux server in the agent.
-func heartBeat(session *yamux.Session) {
-	if session == nil {
-		return
-	}
-
-	for {
-		if session.IsClosed() {
-			break
-		}
-
-		session.Ping()
-
-		// 1 Hz heartbeat
-		time.Sleep(time.Second)
-	}
-}
-
-func agentDialer(addr *url.URL, enableYamux bool) dialer {
+func agentDialer(addr *url.URL) dialer {
 	var d dialer
 	switch addr.Scheme {
 	case VSockSocketScheme:
@@ -242,48 +223,7 @@ func agentDialer(addr *url.URL, enableYamux bool) dialer {
 		d = unixDialer
 	}
 
-	if !enableYamux {
-		return d
-	}
-
-	// yamux dialer
-	return func(sock string, timeout time.Duration) (net.Conn, error) {
-		conn, err := d(sock, timeout)
-		if err != nil {
-			return nil, err
-		}
-		defer func() {
-			if err != nil {
-				conn.Close()
-			}
-		}()
-
-		var session *yamux.Session
-		sessionConfig := yamux.DefaultConfig()
-		// Disable keepAlive since we don't know how much time a container can be paused
-		sessionConfig.EnableKeepAlive = false
-		sessionConfig.ConnectionWriteTimeout = time.Second
-		session, err = yamux.Client(conn, sessionConfig)
-		if err != nil {
-			return nil, err
-		}
-
-		// Start the heartbeat in a separate go routine
-		go heartBeat(session)
-
-		var stream net.Conn
-		stream, err = session.Open()
-		if err != nil {
-			return nil, err
-		}
-
-		y := &yamuxSessionStream{
-			Conn:    stream.(net.Conn),
-			session: session,
-		}
-
-		return y, nil
-	}
+	return d
 }
 
 func unixDialer(sock string, timeout time.Duration) (net.Conn, error) {

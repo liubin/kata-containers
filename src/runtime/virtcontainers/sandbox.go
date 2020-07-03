@@ -25,7 +25,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/drivers"
@@ -33,6 +32,7 @@ import (
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	vccgroups "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cgroups"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
@@ -85,7 +85,6 @@ type SandboxConfig struct {
 	AgentType   AgentType
 	AgentConfig interface{}
 
-	ProxyType   ProxyType
 	ProxyConfig ProxyConfig
 
 	ShimType   ShimType
@@ -1020,7 +1019,6 @@ func (s *Sandbox) startVM() (err error) {
 				HypervisorConfig: s.config.HypervisorConfig,
 				AgentType:        s.config.AgentType,
 				AgentConfig:      s.config.AgentConfig,
-				ProxyType:        s.config.ProxyType,
 				ProxyConfig:      s.config.ProxyConfig,
 			})
 			if err != nil {

@@ -47,7 +47,6 @@ type VMConfig struct {
 	AgentType   AgentType
 	AgentConfig interface{}
 
-	ProxyType   ProxyType
 	ProxyConfig ProxyConfig
 }
 
@@ -110,14 +109,13 @@ func setupProxy(h hypervisor, agent agent, config VMConfig, id string) (int, str
 		return -1, "", nil, err
 	}
 
-	proxy, err := newProxy(config.ProxyType)
+	proxy, err := newProxy()
 	if err != nil {
 		return -1, "", nil, err
 	}
 
 	proxyParams := proxyParams{
 		id:         id,
-		path:       config.ProxyConfig.Path,
 		agentURL:   agentURL,
 		consoleURL: consoleURL,
 		logger:     virtLog.WithField("vm", id),
@@ -126,9 +124,8 @@ func setupProxy(h hypervisor, agent agent, config VMConfig, id string) (int, str
 	pid, url, err := proxy.start(proxyParams)
 	if err != nil {
 		virtLog.WithFields(logrus.Fields{
-			"vm":         id,
-			"proxy type": config.ProxyType,
-			"params":     proxyParams,
+			"vm":     id,
+			"params": proxyParams,
 		}).WithError(err).Error("failed to start proxy")
 		return -1, "", nil, err
 	}
@@ -178,7 +175,7 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 	// 2. setup agent
 	agent := newAgent(config.AgentType)
 	vmSharePath := buildVMSharePath(id, store.RunVMStoragePath())
-	err = agent.configure(hypervisor, id, vmSharePath, isProxyBuiltIn(config.ProxyType), config.AgentConfig)
+	err = agent.configure(hypervisor, id, vmSharePath, true, config.AgentConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -261,9 +258,9 @@ func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, err
 	}
 
 	agent := newAgent(config.AgentType)
-	agent.configureFromGrpc(hypervisor, v.Id, isProxyBuiltIn(config.ProxyType), config.AgentConfig)
+	agent.configureFromGrpc(hypervisor, v.Id, true, config.AgentConfig)
 
-	proxy, err := newProxy(config.ProxyType)
+	proxy, err := newProxy()
 	if err != nil {
 		return nil, err
 	}

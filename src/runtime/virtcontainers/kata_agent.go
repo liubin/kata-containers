@@ -220,7 +220,6 @@ type kataAgent struct {
 	reqHandlers    map[string]reqFunc
 	state          KataAgentState
 	keepConn       bool
-	proxyBuiltIn   bool
 	dynamicTracing bool
 	dead           bool
 	kmodules       []string
@@ -333,7 +332,7 @@ func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config interface
 		return false, vcTypes.ErrInvalidConfigType
 	}
 
-	k.proxy, err = newProxy(sandbox.config.ProxyType)
+	k.proxy, err = newProxy()
 	if err != nil {
 		return false, err
 	}
@@ -342,8 +341,6 @@ func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config interface
 	if err != nil {
 		return false, err
 	}
-
-	k.proxyBuiltIn = isProxyBuiltIn(sandbox.config.ProxyType)
 
 	// Fetch agent runtime info.
 	if useOldStore(sandbox.ctx) {
@@ -388,10 +385,6 @@ func (k *kataAgent) internalConfigure(h hypervisor, id string, builtin bool, con
 		default:
 			return vcTypes.ErrInvalidConfigType
 		}
-	}
-
-	if builtin {
-		k.proxyBuiltIn = true
 	}
 
 	return nil
@@ -443,6 +436,7 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 	return h.addDevice(sharedVolume, fsDev)
 }
 
+// FIXME delete builtin after is merged
 func (k *kataAgent) configureFromGrpc(h hypervisor, id string, builtin bool, config interface{}) error {
 	return k.internalConfigure(h, id, builtin, config)
 }
@@ -473,7 +467,7 @@ func (k *kataAgent) createSandbox(sandbox *Sandbox) error {
 	if err := k.setupSharedPath(sandbox); err != nil {
 		return err
 	}
-	return k.configure(sandbox.hypervisor, sandbox.id, getSharePath(sandbox.id), k.proxyBuiltIn, sandbox.config.AgentConfig)
+	return k.configure(sandbox.hypervisor, sandbox.id, getSharePath(sandbox.id), true, sandbox.config.AgentConfig)
 }
 
 func cmdToKataProcess(cmd types.Cmd) (process *grpc.Process, err error) {
@@ -734,7 +728,6 @@ func (k *kataAgent) startProxy(sandbox *Sandbox) error {
 	proxyParams := proxyParams{
 		id:         sandbox.id,
 		hid:        getHypervisorPid(sandbox.hypervisor),
-		path:       sandbox.config.ProxyConfig.Path,
 		agentURL:   agentURL,
 		consoleURL: consoleURL,
 		logger:     k.Logger().WithField("sandbox", sandbox.id),
@@ -1901,7 +1894,7 @@ func (k *kataAgent) connect() error {
 	}
 
 	k.Logger().WithField("url", k.state.URL).WithField("proxy", k.state.ProxyPid).Info("New client")
-	client, err := kataclient.NewAgentClient(k.ctx, k.state.URL, k.proxyBuiltIn)
+	client, err := kataclient.NewAgentClient(k.ctx, k.state.URL)
 	if err != nil {
 		k.dead = true
 		return err

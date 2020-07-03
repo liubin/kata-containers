@@ -37,7 +37,6 @@ sandbox lifecycle through the rest of the [sandbox API](#sandbox-functions).
   * [`HypervisorType`](#hypervisortype)
   * [`HypervisorConfig`](#hypervisorconfig)
   * [`AgentType`](#agenttype)
-  * [`ProxyType`](#proxytype)
   * [`ProxyConfig`](#proxyconfig)
   * [`ShimType`](#shimtype)
   * [`NetworkConfig`](#networkconfig)
@@ -69,7 +68,6 @@ type SandboxConfig struct {
 	AgentType   AgentType
 	AgentConfig interface{}
 
-	ProxyType   ProxyType
 	ProxyConfig ProxyConfig
 
 	ShimType   ShimType
@@ -219,23 +217,6 @@ const (
 	// SocketTypeUNIX is a UNIX socket type for talking to an agent.
 	// It typically means the agent is living behind a host proxy.
 	SocketTypeUNIX = "unix"
-)
-```
-
-##### `ProxyType`
-```Go
-// ProxyType describes a proxy type.
-type ProxyType string
-
-const (
-	// NoopProxyType is the noopProxy.
-	NoopProxyType ProxyType = "noopProxy"
-
-	// NoProxyType is the noProxy.
-	NoProxyType ProxyType = "noProxy"
-
-	// KataProxyType is the kataProxy.
-	KataProxyType ProxyType = "kataProxy"
 )
 ```
 

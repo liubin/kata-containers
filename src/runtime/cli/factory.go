@@ -168,7 +168,6 @@ var initFactoryCommand = cli.Command{
 				HypervisorConfig: runtimeConfig.HypervisorConfig,
 				AgentType:        runtimeConfig.AgentType,
 				AgentConfig:      runtimeConfig.AgentConfig,
-				ProxyType:        runtimeConfig.ProxyType,
 				ProxyConfig:      runtimeConfig.ProxyConfig,
 			},
 		}
@@ -258,7 +257,6 @@ var destroyFactoryCommand = cli.Command{
 					HypervisorConfig: runtimeConfig.HypervisorConfig,
 					AgentType:        runtimeConfig.AgentType,
 					AgentConfig:      runtimeConfig.AgentConfig,
-					ProxyType:        runtimeConfig.ProxyType,
 					ProxyConfig:      runtimeConfig.ProxyConfig,
 				},
 			}
@@ -316,7 +314,6 @@ var statusFactoryCommand = cli.Command{
 					HypervisorConfig: runtimeConfig.HypervisorConfig,
 					AgentType:        runtimeConfig.AgentType,
 					AgentConfig:      runtimeConfig.AgentConfig,
-					ProxyType:        runtimeConfig.ProxyType,
 					ProxyConfig:      runtimeConfig.ProxyConfig,
 				},
 			}

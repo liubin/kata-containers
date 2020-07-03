@@ -117,8 +117,6 @@ func newTestSandboxConfigNoop() SandboxConfig {
 		Containers: []ContainerConfig{container},
 
 		Annotations: sandboxAnnotations,
-
-		ProxyType: NoopProxyType,
 	}
 
 	configFile := filepath.Join(bundlePath, "config.json")
@@ -1430,8 +1428,6 @@ func createNewSandboxConfig(hType HypervisorType, aType AgentType, aConfig inter
 		AgentConfig: aConfig,
 
 		NetworkConfig: netConfig,
-
-		ProxyType: NoopProxyType,
 	}
 }
 

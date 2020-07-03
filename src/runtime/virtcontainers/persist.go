@@ -180,9 +180,7 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 	ss.Config = persistapi.SandboxConfig{
 		HypervisorType: string(sconfig.HypervisorType),
 		AgentType:      string(sconfig.AgentType),
-		ProxyType:      string(sconfig.ProxyType),
 		ProxyConfig: persistapi.ProxyConfig{
-			Path:  sconfig.ProxyConfig.Path,
 			Debug: sconfig.ProxyConfig.Debug,
 		},
 		ShimType: string(sconfig.ShimType),
@@ -471,9 +469,7 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 		ID:             id,
 		HypervisorType: HypervisorType(savedConf.HypervisorType),
 		AgentType:      AgentType(savedConf.AgentType),
-		ProxyType:      ProxyType(savedConf.ProxyType),
 		ProxyConfig: ProxyConfig{
-			Path:  savedConf.ProxyConfig.Path,
 			Debug: savedConf.ProxyConfig.Debug,
 		},
 		ShimType: ShimType(savedConf.ShimType),

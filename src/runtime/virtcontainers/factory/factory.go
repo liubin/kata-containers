@@ -147,10 +147,6 @@ func (f *factory) validateNewVMConfig(config vc.VMConfig) error {
 		return fmt.Errorf("Missing agent type")
 	}
 
-	if len(config.ProxyType.String()) == 0 {
-		return fmt.Errorf("Missing proxy type")
-	}
-
 	return config.Valid()
 }
 

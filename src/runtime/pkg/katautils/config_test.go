@@ -201,7 +201,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		AgentType:   defaultAgent,
 		AgentConfig: agentConfig,
 
-		ProxyType:   defaultProxy,
 		ProxyConfig: proxyConfig,
 
 		ShimType:   defaultShim,
@@ -663,7 +662,6 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		AgentType:   defaultAgent,
 		AgentConfig: expectedAgentConfig,
 
-		ProxyType:   defaultProxy,
 		ProxyConfig: expectedProxyConfig,
 
 		ShimType:   defaultShim,
@@ -753,10 +751,6 @@ func TestMinimalRuntimeConfigWithVsock(t *testing.T) {
 	_, config, err := LoadConfiguration(configPath, false, false)
 	if err != nil {
 		t.Fatal(err)
-	}
-
-	if config.ProxyType != vc.NoProxyType {
-		t.Fatalf("Proxy type must be NoProxy, got %+v", config.ProxyType)
 	}
 
 	if !reflect.DeepEqual(config.ProxyConfig, vc.ProxyConfig{}) {

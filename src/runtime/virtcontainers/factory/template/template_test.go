@@ -39,7 +39,6 @@ func TestTemplateFactory(t *testing.T) {
 		HypervisorType:   vc.MockHypervisor,
 		HypervisorConfig: hyperConfig,
 		AgentType:        vc.NoopAgentType,
-		ProxyType:        vc.NoopProxyType,
 	}
 
 	err := vmConfig.Valid()

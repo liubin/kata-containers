@@ -28,7 +28,6 @@ type proxyBuiltin struct {
 // ProxyConfig is a structure storing information needed from any
 // proxy in order to be properly initialized.
 type ProxyConfig struct {
-	Path  string
 	Debug bool
 }
 
@@ -36,30 +35,12 @@ type ProxyConfig struct {
 // for the execution of the proxy binary.
 type proxyParams struct {
 	id         string
-	path       string
 	agentURL   string
 	consoleURL string
 	logger     *logrus.Entry
 	hid        int
 	debug      bool
 }
-
-// ProxyType describes a proxy type.
-type ProxyType string
-
-const (
-	// NoopProxyType is the noopProxy.
-	NoopProxyType ProxyType = "noopProxy"
-
-	// NoProxyType is the noProxy.
-	NoProxyType ProxyType = "noProxy"
-
-	// KataProxyType is the kataProxy.
-	KataProxyType ProxyType = "kataProxy"
-
-	// KataBuiltInProxyType is the kataBuiltInProxy.
-	KataBuiltInProxyType ProxyType = "kataBuiltInProxy"
-)
 
 const (
 	// unix socket type of console
@@ -69,75 +50,18 @@ const (
 	consoleProtoPty = "pty"
 )
 
-// Set sets a proxy type based on the input string.
-func (pType *ProxyType) Set(value string) error {
-	switch value {
-	case "noopProxy":
-		*pType = NoopProxyType
-		return nil
-	case "noProxy":
-		*pType = NoProxyType
-		return nil
-	case "kataProxy":
-		*pType = KataProxyType
-		return nil
-	case "kataBuiltInProxy":
-		*pType = KataBuiltInProxyType
-		return nil
-	default:
-		return fmt.Errorf("Unknown proxy type %s", value)
-	}
-}
-
-// String converts a proxy type to a string.
-func (pType *ProxyType) String() string {
-	switch *pType {
-	case NoopProxyType:
-		return string(NoopProxyType)
-	case NoProxyType:
-		return string(NoProxyType)
-	case KataProxyType:
-		return string(KataProxyType)
-	case KataBuiltInProxyType:
-		return string(KataBuiltInProxyType)
-	default:
-		return ""
-	}
-}
-
 // newProxy returns a proxy from a proxy type.
-func newProxy(pType ProxyType) (proxy, error) {
-	switch pType {
-	case "":
-		return &kataBuiltInProxy{}, nil
-	case NoopProxyType:
-		return &noopProxy{}, nil
-	case NoProxyType:
-		return &noProxy{}, nil
-	case KataProxyType:
-		return &kataProxy{}, nil
-	case KataBuiltInProxyType:
-		return &kataBuiltInProxy{}, nil
-	default:
-		return &noopProxy{}, fmt.Errorf("Invalid proxy type: %s", pType)
-	}
+func newProxy() (proxy, error) {
+	return &proxyBuiltin{}, nil
 }
 
 func validateProxyParams(p proxyParams) error {
-	if len(p.path) == 0 || len(p.id) == 0 || len(p.agentURL) == 0 || len(p.consoleURL) == 0 {
+	if len(p.id) == 0 || len(p.agentURL) == 0 || len(p.consoleURL) == 0 {
 		return fmt.Errorf("Invalid proxy parameters %+v", p)
 	}
 
 	if p.logger == nil {
 		return fmt.Errorf("Invalid proxy parameter: proxy logger is not set")
-	}
-
-	return nil
-}
-
-func validateProxyConfig(proxyConfig ProxyConfig) error {
-	if len(proxyConfig.Path) == 0 {
-		return fmt.Errorf("Proxy path cannot be empty")
 	}
 
 	return nil
@@ -158,10 +82,6 @@ func defaultProxyURL(id, socketType string) (string, error) {
 	default:
 		return "", fmt.Errorf("Unknown socket type: %s", socketType)
 	}
-}
-
-func isProxyBuiltIn(pType ProxyType) bool {
-	return pType == KataBuiltInProxyType
 }
 
 // proxy is the virtcontainers proxy interface.
@@ -233,10 +153,9 @@ func (p *proxyBuiltin) consoleWatched() bool {
 // It starts the console watcher for the guest.
 // It returns agentURL to let agent connect directly.
 func (p *proxyBuiltin) start(params proxyParams) (int, string, error) {
-	if params.logger == nil {
-		return -1, "", fmt.Errorf("Invalid proxy parameter: proxy logger is not set")
+	if err := p.validateParams(params); err != nil {
+		return -1, "", err
 	}
-
 	if p.consoleWatched() {
 		return -1, "", fmt.Errorf("The console has been watched for sandbox %s", params.id)
 	}
@@ -265,6 +184,16 @@ func (p *proxyBuiltin) stop(pid int) error {
 		p.conn.Close()
 		p.conn = nil
 		p.sandboxID = ""
+	}
+	return nil
+}
+
+func (p *proxyBuiltin) validateParams(params proxyParams) error {
+	if len(params.id) == 0 || len(params.agentURL) == 0 || len(params.consoleURL) == 0 {
+		return fmt.Errorf("Invalid proxy parameters %+v", params)
+	}
+	if params.logger == nil {
+		return fmt.Errorf("Invalid proxy parameter: proxy logger is not set")
 	}
 	return nil
 }

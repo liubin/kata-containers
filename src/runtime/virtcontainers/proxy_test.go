@@ -19,115 +19,19 @@ import (
 
 var testDefaultLogger = logrus.WithField("proxy", "test")
 
-func testSetProxyType(t *testing.T, value string, expected ProxyType) {
-	var proxyType ProxyType
-	assert := assert.New(t)
-
-	err := (&proxyType).Set(value)
-	assert.NoError(err)
-	assert.Equal(proxyType, expected)
-}
-
-func TestSetKataProxyType(t *testing.T) {
-	testSetProxyType(t, "kataProxy", KataProxyType)
-}
-
-func TestSetNoopProxyType(t *testing.T) {
-	testSetProxyType(t, "noopProxy", NoopProxyType)
-}
-
-func TestSetNoProxyType(t *testing.T) {
-	testSetProxyType(t, "noProxy", NoProxyType)
-}
-
-func TestSetKataBuiltInProxyType(t *testing.T) {
-	testSetProxyType(t, "kataBuiltInProxy", KataBuiltInProxyType)
-}
-
-func TestSetUnknownProxyType(t *testing.T) {
-	var proxyType ProxyType
-	assert := assert.New(t)
-
-	unknownType := "unknown"
-
-	err := (&proxyType).Set(unknownType)
-	assert.Error(err)
-	assert.NotEqual(proxyType, NoopProxyType)
-	assert.NotEqual(proxyType, NoProxyType)
-	assert.NotEqual(proxyType, KataProxyType)
-}
-
-func testStringFromProxyType(t *testing.T, proxyType ProxyType, expected string) {
-	proxyTypeStr := (&proxyType).String()
-	assert.Equal(t, proxyTypeStr, expected)
-}
-
-func TestStringFromKataProxyType(t *testing.T) {
-	proxyType := KataProxyType
-	testStringFromProxyType(t, proxyType, "kataProxy")
-}
-
-func TestStringFromNoProxyType(t *testing.T) {
-	proxyType := NoProxyType
-	testStringFromProxyType(t, proxyType, "noProxy")
-}
-
-func TestStringFromNoopProxyType(t *testing.T) {
-	proxyType := NoopProxyType
-	testStringFromProxyType(t, proxyType, "noopProxy")
-}
-
-func TestStringFromKataBuiltInProxyType(t *testing.T) {
-	proxyType := KataBuiltInProxyType
-	testStringFromProxyType(t, proxyType, "kataBuiltInProxy")
-}
-
-func TestStringFromUnknownProxyType(t *testing.T) {
-	var proxyType ProxyType
-	testStringFromProxyType(t, proxyType, "")
-}
-
-func testNewProxyFromProxyType(t *testing.T, proxyType ProxyType, expected proxy) {
-	result, err := newProxy(proxyType)
+func TestNewProxy(t *testing.T) {
+	expectedProxy := &kataBuiltInProxy{}
+	result, err := newProxy()
 	assert := assert.New(t)
 	assert.NoError(err)
 	assert.Exactly(result, expected)
-}
 
-func TestNewProxyFromKataProxyType(t *testing.T) {
-	proxyType := KataProxyType
-	expectedProxy := &kataProxy{}
-	testNewProxyFromProxyType(t, proxyType, expectedProxy)
-}
-
-func TestNewProxyFromNoProxyType(t *testing.T) {
-	proxyType := NoProxyType
-	expectedProxy := &noProxy{}
-	testNewProxyFromProxyType(t, proxyType, expectedProxy)
-}
-
-func TestNewProxyFromNoopProxyType(t *testing.T) {
-	proxyType := NoopProxyType
-	expectedProxy := &noopProxy{}
-	testNewProxyFromProxyType(t, proxyType, expectedProxy)
-}
-
-func TestNewProxyFromKataBuiltInProxyType(t *testing.T) {
-	proxyType := KataBuiltInProxyType
-	expectedProxy := &kataBuiltInProxy{}
-	testNewProxyFromProxyType(t, proxyType, expectedProxy)
-}
-
-func TestNewProxyFromUnknownProxyType(t *testing.T) {
-	var proxyType ProxyType
-	_, err := newProxy(proxyType)
-	assert.NoError(t, err)
 }
 
 func testNewProxyFromSandboxConfig(t *testing.T, sandboxConfig SandboxConfig) {
 	assert := assert.New(t)
 
-	_, err := newProxy(sandboxConfig.ProxyType)
+	_, err := newProxy()
 	assert.NoError(err)
 
 	err = validateProxyConfig(sandboxConfig.ProxyConfig)
@@ -138,11 +42,10 @@ var testProxyPath = "proxy-path"
 
 func TestNewProxyConfigFromKataProxySandboxConfig(t *testing.T) {
 	proxyConfig := ProxyConfig{
-		Path: testProxyPath,
+		Debug: true,
 	}
 
 	sandboxConfig := SandboxConfig{
-		ProxyType:   KataProxyType,
 		ProxyConfig: proxyConfig,
 	}
 
