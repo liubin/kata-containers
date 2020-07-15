@@ -18,6 +18,8 @@ automates the process to build a kernel for Kata Containers.
 The `build-kernel.sh` script requires an installed Golang version matching the
 [component build requirements](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#requirements-to-build-individual-components).
 
+And also you may need theses tools to build kernels: `flex`, `bison` and `libelf-dev`.
+
 ## Usage
 
 ```
@@ -69,8 +71,8 @@ $ ./build-kernel.sh -v 4.19.86 -g nvidia -f -d setup
 ## Setup kernel source code
 
 ```bash
-$ go get -d -u github.com/kata-containers/packaging
-$ cd $GOPATH/src/github.com/kata-containers/packaging/kernel
+$ go get -d -u github.com/kata-containers/kata-containers/tools/packaging
+$ cd $GOPATH/src/github.com/kata-containers/kata-containers/tools/packaging/kernel
 $ ./build-kernel.sh setup
 ```
 
@@ -80,7 +82,7 @@ sets up a kernel. If you want to add a source modification, add a patch on this
 directory.
 
 The script also adds a kernel config file from
-`${GOPATH}/src/github.com/kata-containers/packaging/kernel/configs/` to `.config`
+`${GOPATH}/src/github.com/kata-containers/kata-containers/tools/packaging/kernel/configs/` to `.config`
 in the kernel source code. You can modify it as needed.
 
 ## Build the kernel

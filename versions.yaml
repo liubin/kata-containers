@@ -152,7 +152,7 @@ assets:
 
   kernel:
     description: "Linux kernel optimised for virtual machines"
-    url: "https://cdn.kernel.org/pub/linux/kernel/v4.x/"
+    url: "https://cdn.kernel.org/pub/linux/kernel"
     uscan-url: >-
       https://mirrors.edge.kernel.org/pub/linux/kernel/v5.x/linux-(5\.4\..+)\.tar\.gz
     version: "v5.4.32"
