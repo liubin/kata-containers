@@ -10,7 +10,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -25,7 +24,6 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
-	kataclient "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/client"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client"
 	models "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/models"
 	ops "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/firecracker/client/operations"
@@ -149,12 +147,13 @@ type firecracker struct {
 	config         HypervisorConfig
 	pendingDevices []firecrackerDevice // Devices to be added before the FC VM ready
 
-	state    firecrackerState
-	jailed   bool //Set to true if jailer is enabled
-	stateful bool //Set to true if running with shimv2
+	state  firecrackerState
+	jailed bool //Set to true if jailer is enabled
 
 	fcConfigPath string
 	fcConfig     *types.FcConfig // Parameters configured before VM starts
+
+	console console.Console
 }
 
 type firecrackerDevice struct {
@@ -196,7 +195,7 @@ func (fc *firecracker) truncateID(id string) string {
 
 // For firecracker this call only sets the internal structure up.
 // The sandbox will be created and started through startSandbox().
-func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, stateful bool) error {
+func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig) error {
 	fc.ctx = ctx
 
 	span, _ := fc.trace("createSandbox")
@@ -207,7 +206,6 @@ func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS N
 	fc.id = fc.truncateID(id)
 	fc.state.set(notReady)
 	fc.config = *hypervisorConfig
-	fc.stateful = stateful
 
 	// When running with jailer all resources need to be under
 	// a specific location and that location needs to have
@@ -367,10 +365,6 @@ func (fc *firecracker) fcInit(timeout int) error {
 		return err
 	}
 
-	if !fc.config.Debug && fc.stateful {
-		args = append(args, "--daemonize")
-	}
-
 	//https://github.com/firecracker-microvm/firecracker/blob/master/docs/jailer.md#jailer-usage
 	//--seccomp-level specifies whether seccomp filters should be installed and how restrictive they should be. Possible values are:
 	//0 : disabled.
@@ -384,6 +378,7 @@ func (fc *firecracker) fcInit(timeout int) error {
 			"--uid", "0", //https://github.com/kata-containers/runtime/issues/1869
 			"--gid", "0",
 			"--chroot-base-dir", fc.chrootBaseDir,
+			"--daemonize",
 		}
 		args = append(args, jailedArgs...)
 		if fc.netNSPath != "" {
@@ -399,14 +394,9 @@ func (fc *firecracker) fcInit(timeout int) error {
 		cmd = exec.Command(fc.config.HypervisorPath, args...)
 	}
 
-	if fc.config.Debug && fc.stateful {
-		stdin, err := fc.watchConsole()
-		if err != nil {
-			return err
-		}
-
-		cmd.Stderr = stdin
-		cmd.Stdout = stdin
+	if fc.config.Debug {
+		cmd.Stderr = fc.console
+		cmd.Stdout = fc.console
 	}
 
 	fc.Logger().WithField("hypervisor args", args).Debug()
@@ -697,7 +687,7 @@ func (fc *firecracker) fcInitConfiguration() error {
 		return err
 	}
 
-	if fc.config.Debug && fc.stateful {
+	if fc.config.Debug {
 		fcKernelParams = append(fcKernelParams, Param{"console", "ttyS0"})
 	} else {
 		fcKernelParams = append(fcKernelParams, []Param{
@@ -1103,8 +1093,15 @@ func (fc *firecracker) hotplugRemoveDevice(devInfo interface{}, devType deviceTy
 
 // getSandboxConsole builds the path of the console where we can read
 // logs coming from the sandbox.
-func (fc *firecracker) getSandboxConsole(id string) (string, error) {
-	return fmt.Sprintf("%s://%s:%d", kataclient.HybridVSockScheme, filepath.Join(fc.jailerRoot, defaultHybridVSocketName), vSockLogsPort), nil
+func (fc *firecracker) getSandboxConsole(id string) (string, string, error) {
+	master, slave, err := console.NewPty()
+	if err != nil {
+		fc.Logger().Debugf("Error create pseudo tty: %v", err)
+		return consoleProtoPty, "", err
+	}
+	fc.console = master
+
+	return consoleProtoPty, slave, nil
 }
 
 func (fc *firecracker) disconnect() {
@@ -1206,11 +1203,7 @@ func (fc *firecracker) check() error {
 	return nil
 }
 
-func (fc *firecracker) generateSocket(id string, useVsock bool) (interface{}, error) {
-	if !useVsock {
-		return nil, fmt.Errorf("Can't start firecracker: vsocks is disabled")
-	}
-
+func (fc *firecracker) generateSocket(id string) (interface{}, error) {
 	fc.Logger().Debug("Using hybrid-vsock endpoint")
 	udsPath := filepath.Join(fc.jailerRoot, defaultHybridVSocketName)
 
@@ -1218,40 +1211,6 @@ func (fc *firecracker) generateSocket(id string, useVsock bool) (interface{}, er
 		UdsPath: udsPath,
 		Port:    uint32(vSockPort),
 	}, nil
-}
-
-func (fc *firecracker) watchConsole() (*os.File, error) {
-	master, slave, err := console.NewPty()
-	if err != nil {
-		fc.Logger().WithField("Error create pseudo tty", err).Debug()
-		return nil, err
-	}
-
-	stdio, err := os.OpenFile(slave, syscall.O_RDWR, 0700)
-	if err != nil {
-		fc.Logger().WithError(err).Debugf("open pseudo tty %s", slave)
-		return nil, err
-	}
-
-	go func() {
-		scanner := bufio.NewScanner(master)
-		for scanner.Scan() {
-			fc.Logger().WithFields(logrus.Fields{
-				"sandbox":   fc.id,
-				"vmconsole": scanner.Text(),
-			}).Infof("reading guest console")
-		}
-
-		if err := scanner.Err(); err != nil {
-			if err == io.EOF {
-				fc.Logger().Info("console watcher quits")
-			} else {
-				fc.Logger().WithError(err).Error("Failed to read guest console")
-			}
-		}
-	}()
-
-	return stdio, nil
 }
 
 func (fc *firecracker) isRateLimiterBuiltin() bool {

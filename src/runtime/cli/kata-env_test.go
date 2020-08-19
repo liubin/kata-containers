@@ -14,6 +14,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	goruntime "runtime"
 	"strings"
 	"testing"
@@ -31,7 +32,6 @@ import (
 )
 
 var (
-	testProxyVersion      = "proxy version 0.1"
 	testNetmonVersion     = "netmon version 0.1"
 	testHypervisorVersion = "QEMU emulator version 2.7.0+git.741f430a96-6.1, Copyright (c) 2003-2016 Fabrice Bellard and the QEMU Project developers"
 )
@@ -39,7 +39,6 @@ var (
 var (
 	hypervisorDebug = false
 	enableVirtioFS  = false
-	proxyDebug      = false
 	runtimeDebug    = false
 	runtimeTrace    = false
 	netmonDebug     = false
@@ -84,7 +83,6 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 	imagePath := filepath.Join(prefixDir, "image")
 	kernelParams := "foo=bar xyz"
 	machineType := "machineType"
-	proxyPath := filepath.Join(prefixDir, "proxy")
 	netmonPath := filepath.Join(prefixDir, "netmon")
 	disableBlock := true
 	blockStorageDriver := "virtio-scsi"
@@ -107,11 +105,6 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		if err != nil {
 			return "", oci.RuntimeConfig{}, err
 		}
-	}
-
-	err = makeVersionBinary(proxyPath, testProxyVersion)
-	if err != nil {
-		return "", oci.RuntimeConfig{}, err
 	}
 
 	err = makeVersionBinary(netmonPath, testNetmonVersion)
@@ -137,7 +130,6 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		ImagePath:            imagePath,
 		KernelParams:         kernelParams,
 		MachineType:          machineType,
-		ProxyPath:            proxyPath,
 		NetmonPath:           netmonPath,
 		LogPath:              logPath,
 		DefaultGuestHookPath: hypConfig.GuestHookPath,
@@ -154,7 +146,6 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		HypervisorDebug:      hypervisorDebug,
 		RuntimeDebug:         runtimeDebug,
 		RuntimeTrace:         runtimeTrace,
-		ProxyDebug:           proxyDebug,
 		NetmonDebug:          netmonDebug,
 		AgentDebug:           agentDebug,
 		AgentTrace:           agentTrace,
@@ -176,15 +167,6 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 	}
 
 	return configFile, config, nil
-}
-
-func getExpectedProxyDetails(config oci.RuntimeConfig) (ProxyInfo, error) {
-	return ProxyInfo{
-		Type:    string(config.ProxyType),
-		Version: constructVersionInfo(testProxyVersion),
-		Path:    config.ProxyConfig.Path,
-		Debug:   config.ProxyConfig.Debug,
-	}, nil
 }
 
 func getExpectedNetmonDetails(config oci.RuntimeConfig) (NetmonInfo, error) {
@@ -229,13 +211,14 @@ func genericGetExpectedHostDetails(tmpdir string, expectedVendor string, expecte
 		Model:  expectedModel,
 	}
 
+	expectedSupportVSocks, _ := vcUtils.SupportsVsocks()
 	expectedHostDetails := HostInfo{
 		Kernel:             expectedKernelVersion,
 		Architecture:       expectedArch,
 		Distro:             expectedDistro,
 		CPU:                expectedCPU,
 		VMContainerCapable: expectedVMContainerCapable,
-		SupportVSocks:      vcUtils.SupportsVsocks(),
+		SupportVSocks:      expectedSupportVSocks,
 	}
 
 	testProcCPUInfo := filepath.Join(tmpdir, "cpuinfo")
@@ -289,6 +272,10 @@ VERSION_ID="%s"
 		expectedHostDetails.CPU.Vendor = "ARM Limited"
 		expectedHostDetails.CPU.Model = "v8"
 	}
+
+	// set CPU num.
+	// will not set memory info, because memory may be changed.
+	expectedHostDetails.CPU.CPUs = runtime.NumCPU()
 
 	return expectedHostDetails, nil
 }
@@ -349,11 +336,6 @@ func getExpectedSettings(config oci.RuntimeConfig, tmpdir, configFile string) (E
 
 	runtime := getExpectedRuntimeDetails(config, configFile)
 
-	proxy, err := getExpectedProxyDetails(config)
-	if err != nil {
-		return EnvInfo{}, err
-	}
-
 	agent, err := getExpectedAgentDetails(config)
 	if err != nil {
 		return EnvInfo{}, err
@@ -379,7 +361,6 @@ func getExpectedSettings(config oci.RuntimeConfig, tmpdir, configFile string) (E
 		Hypervisor: hypervisor,
 		Image:      image,
 		Kernel:     kernel,
-		Proxy:      proxy,
 		Agent:      agent,
 		Host:       host,
 		Netmon:     netmon,
@@ -415,7 +396,16 @@ func TestEnvGetHostInfo(t *testing.T) {
 	host, err := getHostInfo()
 	assert.NoError(t, err)
 
+	// Free/Available are changing
+	expectedHostDetails.Memory = host.Memory
+
 	assert.Equal(t, expectedHostDetails, host)
+
+	// check CPU cores and memory info
+	assert.Equal(t, true, host.CPU.CPUs > 0)
+	assert.Equal(t, true, host.Memory.Total > 0)
+	assert.Equal(t, true, host.Memory.Free > 0)
+	assert.Equal(t, true, host.Memory.Available > 0)
 }
 
 func TestEnvGetHostInfoNoProcCPUInfo(t *testing.T) {
@@ -481,7 +471,6 @@ func TestEnvGetEnvInfo(t *testing.T) {
 	for _, toggle := range []bool{false, true} {
 		hypervisorDebug = toggle
 		enableVirtioFS = toggle
-		proxyDebug = toggle
 		runtimeDebug = toggle
 		runtimeTrace = toggle
 		agentDebug = toggle
@@ -494,6 +483,9 @@ func TestEnvGetEnvInfo(t *testing.T) {
 
 		env, err := getEnvInfo(configFile, config)
 		assert.NoError(t, err)
+
+		// Free/Available are changing
+		expectedEnv.Host.Memory = env.Host.Memory
 
 		assert.Equal(t, expectedEnv, env)
 	}
@@ -519,6 +511,9 @@ func TestEnvGetEnvInfoNoHypervisorVersion(t *testing.T) {
 
 	env, err := getEnvInfo(configFile, config)
 	assert.NoError(err)
+
+	// Free/Available are changing
+	expectedEnv.Host.Memory = env.Host.Memory
 
 	assert.Equal(expectedEnv, env)
 }
@@ -609,50 +604,6 @@ func TestEnvGetRuntimeInfo(t *testing.T) {
 	runtime := getRuntimeInfo(configFile, config)
 
 	assert.Equal(t, expectedRuntime, runtime)
-}
-
-func TestEnvGetProxyInfo(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tmpdir)
-
-	_, config, err := makeRuntimeConfig(tmpdir)
-	assert.NoError(t, err)
-
-	expectedProxy, err := getExpectedProxyDetails(config)
-	assert.NoError(t, err)
-
-	proxy := getProxyInfo(config)
-	assert.NoError(t, err)
-
-	assert.Equal(t, expectedProxy, proxy)
-}
-
-func TestEnvGetProxyInfoNoVersion(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(tmpdir)
-
-	_, config, err := makeRuntimeConfig(tmpdir)
-	assert.NoError(t, err)
-
-	expectedProxy, err := getExpectedProxyDetails(config)
-	assert.NoError(t, err)
-
-	// remove the proxy ensuring its version cannot be queried
-	err = os.Remove(config.ProxyConfig.Path)
-	assert.NoError(t, err)
-
-	expectedProxy.Version = unknownVersionInfo
-
-	proxy := getProxyInfo(config)
-	assert.NoError(t, err)
-
-	assert.Equal(t, expectedProxy, proxy)
 }
 
 func TestEnvGetNetmonInfo(t *testing.T) {
@@ -754,13 +705,6 @@ func testEnvShowTOMLSettings(t *testing.T, tmpdir string, tmpfile *os.File) erro
 		Parameters: "foo=bar xyz",
 	}
 
-	proxy := ProxyInfo{
-		Type:    "proxy-type",
-		Version: constructVersionInfo(testProxyVersion),
-		Path:    "file:///proxy-url",
-		Debug:   false,
-	}
-
 	agent := AgentInfo{}
 
 	expectedHostDetails, err := getExpectedHostDetails(tmpdir)
@@ -771,7 +715,6 @@ func testEnvShowTOMLSettings(t *testing.T, tmpdir string, tmpfile *os.File) erro
 		Hypervisor: hypervisor,
 		Image:      image,
 		Kernel:     kernel,
-		Proxy:      proxy,
 		Agent:      agent,
 		Host:       expectedHostDetails,
 	}
@@ -814,13 +757,6 @@ func testEnvShowJSONSettings(t *testing.T, tmpdir string, tmpfile *os.File) erro
 		Parameters: "foo=bar xyz",
 	}
 
-	proxy := ProxyInfo{
-		Type:    "proxy-type",
-		Version: constructVersionInfo(testProxyVersion),
-		Path:    "file:///proxy-url",
-		Debug:   false,
-	}
-
 	agent := AgentInfo{}
 
 	expectedHostDetails, err := getExpectedHostDetails(tmpdir)
@@ -831,7 +767,6 @@ func testEnvShowJSONSettings(t *testing.T, tmpdir string, tmpfile *os.File) erro
 		Hypervisor: hypervisor,
 		Image:      image,
 		Kernel:     kernel,
-		Proxy:      proxy,
 		Agent:      agent,
 		Host:       expectedHostDetails,
 	}

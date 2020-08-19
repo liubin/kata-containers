@@ -10,8 +10,8 @@ import (
 	"time"
 
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"golang.org/x/net/context"
@@ -56,10 +56,6 @@ type ProcessList []byte
 const (
 	// SocketTypeVSOCK is a VSOCK socket type for talking to an agent.
 	SocketTypeVSOCK = "vsock"
-
-	// SocketTypeUNIX is a UNIX socket type for talking to an agent.
-	// It typically means the agent is living behind a host proxy.
-	SocketTypeUNIX = "unix"
 )
 
 // agent is the virtcontainers agent interface.
@@ -86,17 +82,11 @@ type agent interface {
 	// disconnect will disconnect the connection to the agent
 	disconnect() error
 
-	// start the proxy
-	startProxy(sandbox *Sandbox) error
-
-	// set to use an existing proxy
-	setProxy(sandbox *Sandbox, proxy proxy, pid int, url string) error
-
-	// set to use an existing proxy from Grpc
-	setProxyFromGrpc(proxy proxy, pid int, url string)
-
 	// get agent url
 	getAgentURL() (string, error)
+
+	// set agent url
+	setAgentURL() error
 
 	// update the agent using some elements from another agent
 	reuseAgent(agent agent) error
@@ -173,25 +163,25 @@ type agent interface {
 	resumeContainer(sandbox *Sandbox, c Container) error
 
 	// configure will update agent settings based on provided arguments
-	configure(h hypervisor, id, sharePath string, builtin bool, config interface{}) error
+	configure(h hypervisor, id, sharePath string, config interface{}) error
 
 	// configureFromGrpc will update agent settings based on provided arguments which from Grpc
-	configureFromGrpc(h hypervisor, id string, builtin bool, config interface{}) error
+	configureFromGrpc(h hypervisor, id string, config interface{}) error
 
 	// reseedRNG will reseed the guest random number generator
 	reseedRNG(data []byte) error
 
 	// updateInterface will tell the agent to update a nic for an existed Sandbox.
-	updateInterface(inf *vcTypes.Interface) (*vcTypes.Interface, error)
+	updateInterface(inf *pbTypes.Interface) (*pbTypes.Interface, error)
 
 	// listInterfaces will tell the agent to list interfaces of an existed Sandbox
-	listInterfaces() ([]*vcTypes.Interface, error)
+	listInterfaces() ([]*pbTypes.Interface, error)
 
 	// updateRoutes will tell the agent to update route table for an existed Sandbox.
-	updateRoutes(routes []*vcTypes.Route) ([]*vcTypes.Route, error)
+	updateRoutes(routes []*pbTypes.Route) ([]*pbTypes.Route, error)
 
 	// listRoutes will tell the agent to list routes of an existed Sandbox
-	listRoutes() ([]*vcTypes.Route, error)
+	listRoutes() ([]*pbTypes.Route, error)
 
 	// getGuestDetails will tell the agent to get some information of guest
 	getGuestDetails(*grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error)

@@ -31,7 +31,7 @@ func TestMockHypervisorCreateSandbox(t *testing.T) {
 	ctx := context.Background()
 
 	// wrong config
-	err := m.createSandbox(ctx, sandbox.config.ID, NetworkNamespace{}, &sandbox.config.HypervisorConfig, false)
+	err := m.createSandbox(ctx, sandbox.config.ID, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
 	assert.Error(err)
 
 	sandbox.config.HypervisorConfig = HypervisorConfig{
@@ -40,7 +40,7 @@ func TestMockHypervisorCreateSandbox(t *testing.T) {
 		HypervisorPath: fmt.Sprintf("%s/%s", testDir, testHypervisor),
 	}
 
-	err = m.createSandbox(ctx, sandbox.config.ID, NetworkNamespace{}, &sandbox.config.HypervisorConfig, false)
+	err = m.createSandbox(ctx, sandbox.config.ID, NetworkNamespace{}, &sandbox.config.HypervisorConfig)
 	assert.NoError(err)
 }
 
@@ -66,9 +66,11 @@ func TestMockHypervisorGetSandboxConsole(t *testing.T) {
 	var m *mockHypervisor
 
 	expected := ""
-	result, err := m.getSandboxConsole("testSandboxID")
+	expectedProto := ""
+	proto, result, err := m.getSandboxConsole("testSandboxID")
 	assert.NoError(t, err)
 	assert.Equal(t, result, expected)
+	assert.Equal(t, proto, expectedProto)
 }
 
 func TestMockHypervisorSaveSandbox(t *testing.T) {
@@ -92,7 +94,7 @@ func TestMockHypervisorCheck(t *testing.T) {
 func TestMockGenerateSocket(t *testing.T) {
 	var m *mockHypervisor
 
-	i, err := m.generateSocket("a", true)
+	i, err := m.generateSocket("a")
 	assert.NoError(t, err)
 	assert.NotNil(t, i)
 }

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -18,6 +19,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
 	vcUtils "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/prometheus/procfs"
 	"github.com/urfave/cli"
 )
 
@@ -25,7 +27,7 @@ import (
 //
 // XXX: Increment for every change to the output format
 // (meaning any change to the EnvInfo type).
-const formatVersion = "1.0.24"
+const formatVersion = "1.0.25"
 
 // MetaInfo stores information on the format of the output itself
 type MetaInfo struct {
@@ -53,6 +55,14 @@ type ImageInfo struct {
 type CPUInfo struct {
 	Vendor string
 	Model  string
+	CPUs   int
+}
+
+// MemoryInfo stores host memory details
+type MemoryInfo struct {
+	Total     uint64
+	Free      uint64
+	Available uint64
 }
 
 // RuntimeConfigInfo stores runtime config details.
@@ -101,15 +111,6 @@ type HypervisorInfo struct {
 	PCIeRootPort         uint32
 	HotplugVFIOOnRootBus bool
 	Debug                bool
-	UseVSock             bool
-}
-
-// ProxyInfo stores proxy details
-type ProxyInfo struct {
-	Type    string
-	Version VersionInfo
-	Path    string
-	Debug   bool
 }
 
 // AgentInfo stores agent details
@@ -132,6 +133,7 @@ type HostInfo struct {
 	Architecture       string
 	Distro             DistroInfo
 	CPU                CPUInfo
+	Memory             MemoryInfo
 	VMContainerCapable bool
 	SupportVSocks      bool
 }
@@ -155,7 +157,6 @@ type EnvInfo struct {
 	Image      ImageInfo
 	Kernel     KernelInfo
 	Initrd     InitrdInfo
-	Proxy      ProxyInfo
 	Agent      AgentInfo
 	Host       HostInfo
 	Netmon     NetmonInfo
@@ -232,42 +233,42 @@ func getHostInfo() (HostInfo, error) {
 	hostCPU := CPUInfo{
 		Vendor: cpuVendor,
 		Model:  cpuModel,
+		CPUs:   runtime.NumCPU(),
 	}
+
+	supportVSocks, _ := vcUtils.SupportsVsocks()
+
+	memoryInfo := getMemoryInfo()
 
 	host := HostInfo{
 		Kernel:             hostKernelVersion,
 		Architecture:       arch,
 		Distro:             hostDistro,
 		CPU:                hostCPU,
+		Memory:             memoryInfo,
 		VMContainerCapable: hostVMContainerCapable,
-		SupportVSocks:      vcUtils.SupportsVsocks(),
+		SupportVSocks:      supportVSocks,
 	}
 
 	return host, nil
 }
 
-func getProxyInfo(config oci.RuntimeConfig) ProxyInfo {
-	if config.ProxyType == vc.NoProxyType {
-		return ProxyInfo{Type: string(config.ProxyType)}
+func getMemoryInfo() MemoryInfo {
+	fs, err := procfs.NewDefaultFS()
+	if err != nil {
+		return MemoryInfo{}
 	}
 
-	proxyConfig := config.ProxyConfig
-
-	var proxyVersionInfo VersionInfo
-	if version, err := getCommandVersion(proxyConfig.Path); err != nil {
-		proxyVersionInfo = unknownVersionInfo
-	} else {
-		proxyVersionInfo = constructVersionInfo(version)
+	mi, err := fs.Meminfo()
+	if err != nil {
+		return MemoryInfo{}
 	}
 
-	proxy := ProxyInfo{
-		Type:    string(config.ProxyType),
-		Version: proxyVersionInfo,
-		Path:    proxyConfig.Path,
-		Debug:   proxyConfig.Debug,
+	return MemoryInfo{
+		Total:     mi.MemTotal,
+		Free:      mi.MemFree,
+		Available: mi.MemAvailable,
 	}
-
-	return proxy
 }
 
 func getNetmonInfo(config oci.RuntimeConfig) NetmonInfo {
@@ -321,7 +322,6 @@ func getHypervisorInfo(config oci.RuntimeConfig) HypervisorInfo {
 		Path:              hypervisorPath,
 		BlockDeviceDriver: config.HypervisorConfig.BlockDeviceDriver,
 		Msize9p:           config.HypervisorConfig.Msize9p,
-		UseVSock:          config.HypervisorConfig.UseVSock,
 		MemorySlots:       config.HypervisorConfig.MemSlots,
 		EntropySource:     config.HypervisorConfig.EntropySource,
 		SharedFS:          config.HypervisorConfig.SharedFS,
@@ -346,8 +346,6 @@ func getEnvInfo(configFile string, config oci.RuntimeConfig) (env EnvInfo, err e
 	if err != nil {
 		return EnvInfo{}, err
 	}
-
-	proxy := getProxyInfo(config)
 
 	netmon := getNetmonInfo(config)
 
@@ -378,7 +376,6 @@ func getEnvInfo(configFile string, config oci.RuntimeConfig) (env EnvInfo, err e
 		Image:      image,
 		Kernel:     kernel,
 		Initrd:     initrd,
-		Proxy:      proxy,
 		Agent:      agent,
 		Host:       host,
 		Netmon:     netmon,

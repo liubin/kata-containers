@@ -176,11 +176,6 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 	sconfig := s.config
 	ss.Config = persistapi.SandboxConfig{
 		HypervisorType: string(sconfig.HypervisorType),
-		ProxyType:      string(sconfig.ProxyType),
-		ProxyConfig: persistapi.ProxyConfig{
-			Path:  sconfig.ProxyConfig.Path,
-			Debug: sconfig.ProxyConfig.Debug,
-		},
 		NetworkConfig: persistapi.NetworkConfig{
 			NetNSPath:         sconfig.NetworkConfig.NetNSPath,
 			NetNsCreated:      sconfig.NetworkConfig.NetNsCreated,
@@ -190,7 +185,6 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 
 		ShmSize:             sconfig.ShmSize,
 		SharePidNs:          sconfig.SharePidNs,
-		Stateful:            sconfig.Stateful,
 		SystemdCgroup:       sconfig.SystemdCgroup,
 		SandboxCgroupOnly:   sconfig.SandboxCgroupOnly,
 		DisableGuestSeccomp: sconfig.DisableGuestSeccomp,
@@ -241,7 +235,6 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 		Realtime:                sconfig.HypervisorConfig.Realtime,
 		Mlock:                   sconfig.HypervisorConfig.Mlock,
 		DisableNestingChecks:    sconfig.HypervisorConfig.DisableNestingChecks,
-		UseVSock:                sconfig.HypervisorConfig.UseVSock,
 		DisableImageNvdimm:      sconfig.HypervisorConfig.DisableImageNvdimm,
 		HotplugVFIOOnRootBus:    sconfig.HypervisorConfig.HotplugVFIOOnRootBus,
 		PCIeRootPort:            sconfig.HypervisorConfig.PCIeRootPort,
@@ -258,7 +251,6 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 
 	ss.Config.KataAgentConfig = &persistapi.KataAgentConfig{
 		LongLiveConn: sconfig.AgentConfig.LongLiveConn,
-		UseVSock:     sconfig.AgentConfig.UseVSock,
 	}
 
 	for _, contConf := range sconfig.Containers {
@@ -444,11 +436,6 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 	sconfig := &SandboxConfig{
 		ID:             id,
 		HypervisorType: HypervisorType(savedConf.HypervisorType),
-		ProxyType:      ProxyType(savedConf.ProxyType),
-		ProxyConfig: ProxyConfig{
-			Path:  savedConf.ProxyConfig.Path,
-			Debug: savedConf.ProxyConfig.Debug,
-		},
 		NetworkConfig: NetworkConfig{
 			NetNSPath:         savedConf.NetworkConfig.NetNSPath,
 			NetNsCreated:      savedConf.NetworkConfig.NetNsCreated,
@@ -458,7 +445,6 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 
 		ShmSize:             savedConf.ShmSize,
 		SharePidNs:          savedConf.SharePidNs,
-		Stateful:            savedConf.Stateful,
 		SystemdCgroup:       savedConf.SystemdCgroup,
 		SandboxCgroupOnly:   savedConf.SandboxCgroupOnly,
 		DisableGuestSeccomp: savedConf.DisableGuestSeccomp,
@@ -510,7 +496,6 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 		Realtime:                hconf.Realtime,
 		Mlock:                   hconf.Mlock,
 		DisableNestingChecks:    hconf.DisableNestingChecks,
-		UseVSock:                hconf.UseVSock,
 		DisableImageNvdimm:      hconf.DisableImageNvdimm,
 		HotplugVFIOOnRootBus:    hconf.HotplugVFIOOnRootBus,
 		PCIeRootPort:            hconf.PCIeRootPort,
@@ -527,7 +512,6 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 
 	sconfig.AgentConfig = KataAgentConfig{
 		LongLiveConn: savedConf.KataAgentConfig.LongLiveConn,
-		UseVSock:     savedConf.KataAgentConfig.UseVSock,
 	}
 
 	for _, contConf := range savedConf.ContainerConfigs {

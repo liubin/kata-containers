@@ -1,4 +1,5 @@
 // Copyright (c) 2016 Intel Corporation
+// Copyright (c) 2020 Adobe Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -6,6 +7,7 @@
 package virtcontainers
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -32,6 +34,7 @@ import (
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	vccgroups "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cgroups"
@@ -82,9 +85,6 @@ type SandboxConfig struct {
 
 	AgentConfig KataAgentConfig
 
-	ProxyType   ProxyType
-	ProxyConfig ProxyConfig
-
 	NetworkConfig NetworkConfig
 
 	// Volumes is a list of shared volumes between the host and the Sandbox.
@@ -104,10 +104,6 @@ type SandboxConfig struct {
 
 	// SharePidNs sets all containers to share the same sandbox level pid namespace.
 	SharePidNs bool
-
-	// types.Stateful keeps sandbox resources in memory across APIs. Users will be responsible
-	// for calling Release() to release the memory resources.
-	Stateful bool
 
 	// SystemdCgroup enables systemd cgroup support
 	SystemdCgroup bool
@@ -136,17 +132,6 @@ func (s *Sandbox) trace(name string) (opentracing.Span, context.Context) {
 	span.SetTag("subsystem", "sandbox")
 
 	return span, ctx
-}
-
-func (s *Sandbox) startProxy() error {
-
-	// If the proxy is KataBuiltInProxyType type, it needs to restart the proxy
-	// to watch the guest console if it hadn't been watched.
-	if s.agent == nil {
-		return fmt.Errorf("sandbox %s missed agent pointer", s.ID())
-	}
-
-	return s.agent.startProxy(s)
 }
 
 // valid checks that the sandbox configuration is valid.
@@ -200,13 +185,14 @@ type Sandbox struct {
 
 	shmSize           uint64
 	sharePidNs        bool
-	stateful          bool
 	seccompSupported  bool
 	disableVMShutdown bool
 
 	cgroupMgr *vccgroups.Manager
 
 	ctx context.Context
+
+	cw *consoleWatcher
 }
 
 // ID returns the sandbox identifier string.
@@ -289,14 +275,6 @@ func (s *Sandbox) Release() error {
 	}
 	s.hypervisor.disconnect()
 	return s.agent.disconnect()
-}
-
-func (s *Sandbox) releaseStatelessSandbox() error {
-	if s.stateful {
-		return nil
-	}
-
-	return s.Release()
 }
 
 // Status gets the status of the sandbox
@@ -526,7 +504,6 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		wg:              &sync.WaitGroup{},
 		shmSize:         sandboxConfig.ShmSize,
 		sharePidNs:      sandboxConfig.SharePidNs,
-		stateful:        sandboxConfig.Stateful,
 		networkNS:       NetworkNamespace{NetNsPath: sandboxConfig.NetworkConfig.NetNSPath},
 		ctx:             ctx,
 	}
@@ -562,11 +539,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	}
 
 	// new store doesn't require hypervisor to be stored immediately
-	if err = s.hypervisor.createSandbox(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig, s.stateful); err != nil {
-		return nil, err
-	}
-
-	if err := s.createCgroupManager(); err != nil {
+	if err = s.hypervisor.createSandbox(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig); err != nil {
 		return nil, err
 	}
 
@@ -685,6 +658,12 @@ func fetchSandbox(ctx context.Context, sandboxID string) (sandbox *Sandbox, err 
 	sandbox, err = createSandbox(ctx, config, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create sandbox with config %+v: %v", config, err)
+	}
+
+	if sandbox.config.SandboxCgroupOnly {
+		if err := sandbox.createCgroupManager(); err != nil {
+			return nil, err
+		}
 	}
 
 	// This sandbox already exists, we don't need to recreate the containers in the guest.
@@ -824,7 +803,7 @@ func (s *Sandbox) createNetwork() error {
 	// after vm is started.
 	if s.factory == nil {
 		// Add the network
-		endpoints, err := s.network.Add(s.ctx, &s.config.NetworkConfig, s.hypervisor, false)
+		endpoints, err := s.network.Add(s.ctx, &s.config.NetworkConfig, s, false)
 		if err != nil {
 			return err
 		}
@@ -858,7 +837,7 @@ func (s *Sandbox) removeNetwork() error {
 	return s.network.Remove(s.ctx, &s.networkNS, s.hypervisor)
 }
 
-func (s *Sandbox) generateNetInfo(inf *vcTypes.Interface) (NetworkInfo, error) {
+func (s *Sandbox) generateNetInfo(inf *pbTypes.Interface) (NetworkInfo, error) {
 	hw, err := net.ParseMAC(inf.HwAddr)
 	if err != nil {
 		return NetworkInfo{}, err
@@ -882,14 +861,14 @@ func (s *Sandbox) generateNetInfo(inf *vcTypes.Interface) (NetworkInfo, error) {
 				HardwareAddr: hw,
 				MTU:          int(inf.Mtu),
 			},
-			Type: inf.LinkType,
+			Type: inf.Type,
 		},
 		Addrs: addrs,
 	}, nil
 }
 
 // AddInterface adds new nic to the sandbox.
-func (s *Sandbox) AddInterface(inf *vcTypes.Interface) (*vcTypes.Interface, error) {
+func (s *Sandbox) AddInterface(inf *pbTypes.Interface) (*pbTypes.Interface, error) {
 	netInfo, err := s.generateNetInfo(inf)
 	if err != nil {
 		return nil, err
@@ -920,7 +899,7 @@ func (s *Sandbox) AddInterface(inf *vcTypes.Interface) (*vcTypes.Interface, erro
 }
 
 // RemoveInterface removes a nic of the sandbox.
-func (s *Sandbox) RemoveInterface(inf *vcTypes.Interface) (*vcTypes.Interface, error) {
+func (s *Sandbox) RemoveInterface(inf *pbTypes.Interface) (*pbTypes.Interface, error) {
 	for i, endpoint := range s.networkNS.Endpoints {
 		if endpoint.HardwareAddr() == inf.HwAddr {
 			s.Logger().WithField("endpoint-type", endpoint.Type()).Info("Hot detaching endpoint")
@@ -940,18 +919,115 @@ func (s *Sandbox) RemoveInterface(inf *vcTypes.Interface) (*vcTypes.Interface, e
 }
 
 // ListInterfaces lists all nics and their configurations in the sandbox.
-func (s *Sandbox) ListInterfaces() ([]*vcTypes.Interface, error) {
+func (s *Sandbox) ListInterfaces() ([]*pbTypes.Interface, error) {
 	return s.agent.listInterfaces()
 }
 
 // UpdateRoutes updates the sandbox route table (e.g. for portmapping support).
-func (s *Sandbox) UpdateRoutes(routes []*vcTypes.Route) ([]*vcTypes.Route, error) {
+func (s *Sandbox) UpdateRoutes(routes []*pbTypes.Route) ([]*pbTypes.Route, error) {
 	return s.agent.updateRoutes(routes)
 }
 
 // ListRoutes lists all routes and their configurations in the sandbox.
-func (s *Sandbox) ListRoutes() ([]*vcTypes.Route, error) {
+func (s *Sandbox) ListRoutes() ([]*pbTypes.Route, error) {
 	return s.agent.listRoutes()
+}
+
+const (
+	// unix socket type of console
+	consoleProtoUnix = "unix"
+
+	// pty type of console.
+	consoleProtoPty = "pty"
+)
+
+// console watcher is designed to monitor guest console output.
+type consoleWatcher struct {
+	proto      string
+	consoleURL string
+	conn       net.Conn
+	ptyConsole *os.File
+}
+
+func newConsoleWatcher(s *Sandbox) (*consoleWatcher, error) {
+	var (
+		err error
+		cw  consoleWatcher
+	)
+
+	cw.proto, cw.consoleURL, err = s.hypervisor.getSandboxConsole(s.id)
+	if err != nil {
+		return nil, err
+	}
+
+	return &cw, nil
+}
+
+// start the console watcher
+func (cw *consoleWatcher) start(s *Sandbox) (err error) {
+	if cw.consoleWatched() {
+		return fmt.Errorf("console watcher has already watched for sandbox %s", s.id)
+	}
+
+	var scanner *bufio.Scanner
+
+	switch cw.proto {
+	case consoleProtoUnix:
+		cw.conn, err = net.Dial("unix", cw.consoleURL)
+		if err != nil {
+			return err
+		}
+		scanner = bufio.NewScanner(cw.conn)
+	case consoleProtoPty:
+		// read-only
+		cw.ptyConsole, err = os.Open(cw.consoleURL)
+		scanner = bufio.NewScanner(cw.ptyConsole)
+	default:
+		return fmt.Errorf("unknown console proto %s", cw.proto)
+	}
+
+	go func() {
+		for scanner.Scan() {
+			s.Logger().WithFields(logrus.Fields{
+				"console-protocol": cw.proto,
+				"console-url":      cw.consoleURL,
+				"sandbox":          s.id,
+				"vmconsole":        scanner.Text(),
+			}).Debug("reading guest console")
+		}
+
+		if err := scanner.Err(); err != nil {
+			if err == io.EOF {
+				s.Logger().Info("console watcher quits")
+			} else {
+				s.Logger().WithError(err).WithFields(logrus.Fields{
+					"console-protocol": cw.proto,
+					"console-url":      cw.consoleURL,
+					"sandbox":          s.id,
+				}).Error("Failed to read guest console logs")
+			}
+		}
+	}()
+
+	return nil
+}
+
+// check if the console watcher has already watched the vm console.
+func (cw *consoleWatcher) consoleWatched() bool {
+	return cw.conn != nil || cw.ptyConsole != nil
+}
+
+// stop the console watcher.
+func (cw *consoleWatcher) stop() {
+	if cw.conn != nil {
+		cw.conn.Close()
+		cw.conn = nil
+	}
+
+	if cw.ptyConsole != nil {
+		cw.ptyConsole.Close()
+		cw.ptyConsole = nil
+	}
 }
 
 // startVM starts the VM.
@@ -961,14 +1037,21 @@ func (s *Sandbox) startVM() (err error) {
 
 	s.Logger().Info("Starting VM")
 
+	if s.config.HypervisorConfig.Debug {
+		// create console watcher
+		consoleWatcher, err := newConsoleWatcher(s)
+		if err != nil {
+			return err
+		}
+		s.cw = consoleWatcher
+	}
+
 	if err := s.network.Run(s.networkNS.NetNsPath, func() error {
 		if s.factory != nil {
 			vm, err := s.factory.GetVM(ctx, VMConfig{
 				HypervisorType:   s.config.HypervisorType,
 				HypervisorConfig: s.config.HypervisorConfig,
 				AgentConfig:      s.config.AgentConfig,
-				ProxyType:        s.config.ProxyType,
-				ProxyConfig:      s.config.ProxyConfig,
 			})
 			if err != nil {
 				return err
@@ -991,7 +1074,7 @@ func (s *Sandbox) startVM() (err error) {
 	// In case of vm factory, network interfaces are hotplugged
 	// after vm is started.
 	if s.factory != nil {
-		endpoints, err := s.network.Add(s.ctx, &s.config.NetworkConfig, s.hypervisor, true)
+		endpoints, err := s.network.Add(s.ctx, &s.config.NetworkConfig, s, true)
 		if err != nil {
 			return err
 		}
@@ -1006,6 +1089,14 @@ func (s *Sandbox) startVM() (err error) {
 	}
 
 	s.Logger().Info("VM started")
+
+	if s.cw != nil {
+		s.Logger().Debug("console watcher starts")
+		if err := s.cw.start(s); err != nil {
+			s.cw.stop()
+			return err
+		}
+	}
 
 	// Once the hypervisor is done starting the sandbox,
 	// we want to guarantee that it is manageable.
@@ -1111,6 +1202,14 @@ func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, erro
 	defer func() {
 		// Rollback if error happens.
 		if err != nil {
+			logger := s.Logger().WithFields(logrus.Fields{"container-id": c.id, "sandox-id": s.id, "rollback": true})
+			logger.Warning("Cleaning up partially created container")
+
+			if err2 := c.stop(true); err2 != nil {
+				logger.WithError(err2).Warning("Could not delete container")
+			}
+
+			logger.Debug("Removing stopped container from sandbox store")
 			s.removeContainer(c.id)
 		}
 	}()
@@ -1408,7 +1507,7 @@ func (s *Sandbox) ResumeContainer(containerID string) error {
 	return nil
 }
 
-// createContainers registers all containers to the proxy, create the
+// createContainers registers all containers, create the
 // containers in the guest and starts one shim per container.
 func (s *Sandbox) createContainers() error {
 	span, _ := s.trace("createContainers")
@@ -1503,6 +1602,12 @@ func (s *Sandbox) Stop(force bool) error {
 
 	if err := s.stopVM(); err != nil && !force {
 		return err
+	}
+
+	// shutdown console watcher if exists
+	if s.cw != nil {
+		s.Logger().Debug("stop the sandbox")
+		s.cw.stop()
 	}
 
 	if err := s.setSandboxState(types.StateStopped); err != nil {
@@ -1713,7 +1818,16 @@ func (s *Sandbox) AppendDevice(device api.Device) error {
 	switch device.DeviceType() {
 	case config.VhostUserSCSI, config.VhostUserNet, config.VhostUserBlk, config.VhostUserFS:
 		return s.hypervisor.addDevice(device.GetDeviceInfo().(*config.VhostUserDeviceAttrs), vhostuserDev)
+	case config.DeviceVFIO:
+		vfioDevs := device.GetDeviceInfo().([]*config.VFIODev)
+		for _, d := range vfioDevs {
+			return s.hypervisor.addDevice(*d, vfioDev)
+		}
+	default:
+		s.Logger().WithField("device-type", device.DeviceType()).
+			Warn("Could not append device: unsupported device type")
 	}
+
 	return fmt.Errorf("unsupported device type")
 }
 

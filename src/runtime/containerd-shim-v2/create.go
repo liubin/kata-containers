@@ -19,7 +19,6 @@ import (
 	"github.com/containerd/typeurl"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 
 	// only register the proto type
 	_ "github.com/containerd/containerd/runtime/linux/runctypes"
@@ -72,7 +71,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		defer func() {
 			if err != nil && rootFs.Mounted {
 				if err2 := mount.UnmountAll(rootfs, 0); err2 != nil {
-					logrus.WithError(err2).Warn("failed to cleanup rootfs mount")
+					shimLog.WithField("container-type", containerType).WithError(err2).Warn("failed to cleanup rootfs mount")
 				}
 			}
 		}()
@@ -83,12 +82,12 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		// ctx will be canceled after this rpc service call, but the sandbox will live
 		// across multiple rpc service calls.
 		//
-		sandbox, _, err := katautils.CreateSandbox(s.ctx, vci, *ociSpec, *s.config, rootFs, r.ID, bundlePath, "", disableOutput, false, true)
+		sandbox, _, err := katautils.CreateSandbox(s.ctx, vci, *ociSpec, *s.config, rootFs, r.ID, bundlePath, "", disableOutput, false)
 		if err != nil {
 			return nil, err
 		}
 		s.sandbox = sandbox
-		go s.startManagementServer(ctx)
+		go s.startManagementServer(ctx, ociSpec)
 
 	case vc.PodContainer:
 		if s.sandbox == nil {
@@ -102,12 +101,12 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		defer func() {
 			if err != nil && rootFs.Mounted {
 				if err2 := mount.UnmountAll(rootfs, 0); err2 != nil {
-					logrus.WithError(err2).Warn("failed to cleanup rootfs mount")
+					shimLog.WithField("container-type", containerType).WithError(err2).Warn("failed to cleanup rootfs mount")
 				}
 			}
 		}()
 
-		_, err = katautils.CreateContainer(ctx, vci, s.sandbox, *ociSpec, rootFs, r.ID, bundlePath, "", disableOutput, true)
+		_, err = katautils.CreateContainer(ctx, s.sandbox, *ociSpec, rootFs, r.ID, bundlePath, "", disableOutput)
 		if err != nil {
 			return nil, err
 		}

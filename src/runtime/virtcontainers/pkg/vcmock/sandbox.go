@@ -6,13 +6,14 @@
 package vcmock
 
 import (
+	"fmt"
 	"io"
 	"syscall"
 
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
+	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
@@ -95,7 +96,10 @@ func (s *Sandbox) Delete() error {
 
 // CreateContainer implements the VCSandbox function of the same name.
 func (s *Sandbox) CreateContainer(conf vc.ContainerConfig) (vc.VCContainer, error) {
-	return &Container{}, nil
+	if s.CreateContainerFunc != nil {
+		return s.CreateContainerFunc(conf)
+	}
+	return nil, fmt.Errorf("%s: %s (%+v): sandboxID: %v, containerConfig: %v", mockErrorPrefix, getSelf(), s, s.MockID, conf)
 }
 
 // DeleteContainer implements the VCSandbox function of the same name.
@@ -125,6 +129,9 @@ func (s *Sandbox) StatusContainer(contID string) (vc.ContainerStatus, error) {
 
 // StatsContainer implements the VCSandbox function of the same name.
 func (s *Sandbox) StatsContainer(contID string) (vc.ContainerStats, error) {
+	if s.StatsContainerFunc != nil {
+		return s.StatsContainerFunc(contID)
+	}
 	return vc.ContainerStats{}, nil
 }
 
@@ -189,27 +196,27 @@ func (s *Sandbox) AddDevice(info config.DeviceInfo) (api.Device, error) {
 }
 
 // AddInterface implements the VCSandbox function of the same name.
-func (s *Sandbox) AddInterface(inf *vcTypes.Interface) (*vcTypes.Interface, error) {
+func (s *Sandbox) AddInterface(inf *pbTypes.Interface) (*pbTypes.Interface, error) {
 	return nil, nil
 }
 
 // RemoveInterface implements the VCSandbox function of the same name.
-func (s *Sandbox) RemoveInterface(inf *vcTypes.Interface) (*vcTypes.Interface, error) {
+func (s *Sandbox) RemoveInterface(inf *pbTypes.Interface) (*pbTypes.Interface, error) {
 	return nil, nil
 }
 
 // ListInterfaces implements the VCSandbox function of the same name.
-func (s *Sandbox) ListInterfaces() ([]*vcTypes.Interface, error) {
+func (s *Sandbox) ListInterfaces() ([]*pbTypes.Interface, error) {
 	return nil, nil
 }
 
 // UpdateRoutes implements the VCSandbox function of the same name.
-func (s *Sandbox) UpdateRoutes(routes []*vcTypes.Route) ([]*vcTypes.Route, error) {
+func (s *Sandbox) UpdateRoutes(routes []*pbTypes.Route) ([]*pbTypes.Route, error) {
 	return nil, nil
 }
 
 // ListRoutes implements the VCSandbox function of the same name.
-func (s *Sandbox) ListRoutes() ([]*vcTypes.Route, error) {
+func (s *Sandbox) ListRoutes() ([]*pbTypes.Route, error) {
 	return nil, nil
 }
 
@@ -231,4 +238,12 @@ func (s *Sandbox) GetAgentMetrics() (string, error) {
 		return s.GetAgentMetricsFunc()
 	}
 	return "", nil
+}
+
+// Stats implements the VCSandbox function of the same name.
+func (s *Sandbox) Stats() (vc.SandboxStats, error) {
+	if s.StatsFunc != nil {
+		return s.StatsFunc()
+	}
+	return vc.SandboxStats{}, nil
 }

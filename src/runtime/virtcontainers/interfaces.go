@@ -12,7 +12,7 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
+	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
@@ -24,36 +24,6 @@ type VC interface {
 	SetFactory(ctx context.Context, factory Factory)
 
 	CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig) (VCSandbox, error)
-	DeleteSandbox(ctx context.Context, sandboxID string) (VCSandbox, error)
-	FetchSandbox(ctx context.Context, sandboxID string) (VCSandbox, error)
-	ListSandbox(ctx context.Context) ([]SandboxStatus, error)
-	RunSandbox(ctx context.Context, sandboxConfig SandboxConfig) (VCSandbox, error)
-	StartSandbox(ctx context.Context, sandboxID string) (VCSandbox, error)
-	StatusSandbox(ctx context.Context, sandboxID string) (SandboxStatus, error)
-	StopSandbox(ctx context.Context, sandboxID string, force bool) (VCSandbox, error)
-
-	CreateContainer(ctx context.Context, sandboxID string, containerConfig ContainerConfig) (VCSandbox, VCContainer, error)
-	DeleteContainer(ctx context.Context, sandboxID, containerID string) (VCContainer, error)
-	EnterContainer(ctx context.Context, sandboxID, containerID string, cmd types.Cmd) (VCSandbox, VCContainer, *Process, error)
-	KillContainer(ctx context.Context, sandboxID, containerID string, signal syscall.Signal, all bool) error
-	StartContainer(ctx context.Context, sandboxID, containerID string) (VCContainer, error)
-	StatusContainer(ctx context.Context, sandboxID, containerID string) (ContainerStatus, error)
-	StatsContainer(ctx context.Context, sandboxID, containerID string) (ContainerStats, error)
-	StatsSandbox(ctx context.Context, sandboxID string) (SandboxStats, []ContainerStats, error)
-	StopContainer(ctx context.Context, sandboxID, containerID string) (VCContainer, error)
-	ProcessListContainer(ctx context.Context, sandboxID, containerID string, options ProcessListOptions) (ProcessList, error)
-	UpdateContainer(ctx context.Context, sandboxID, containerID string, resources specs.LinuxResources) error
-	PauseContainer(ctx context.Context, sandboxID, containerID string) error
-	ResumeContainer(ctx context.Context, sandboxID, containerID string) error
-
-	AddDevice(ctx context.Context, sandboxID string, info config.DeviceInfo) (api.Device, error)
-
-	AddInterface(ctx context.Context, sandboxID string, inf *vcTypes.Interface) (*vcTypes.Interface, error)
-	RemoveInterface(ctx context.Context, sandboxID string, inf *vcTypes.Interface) (*vcTypes.Interface, error)
-	ListInterfaces(ctx context.Context, sandboxID string) ([]*vcTypes.Interface, error)
-	UpdateRoutes(ctx context.Context, sandboxID string, routes []*vcTypes.Route) ([]*vcTypes.Route, error)
-	ListRoutes(ctx context.Context, sandboxID string) ([]*vcTypes.Route, error)
-
 	CleanupContainer(ctx context.Context, sandboxID, containerID string, force bool) error
 }
 
@@ -67,6 +37,8 @@ type VCSandbox interface {
 	GetContainer(containerID string) VCContainer
 	ID() string
 	SetAnnotations(annotations map[string]string) error
+
+	Stats() (SandboxStats, error)
 
 	Start() error
 	Stop(force bool) error
@@ -93,11 +65,11 @@ type VCSandbox interface {
 
 	AddDevice(info config.DeviceInfo) (api.Device, error)
 
-	AddInterface(inf *vcTypes.Interface) (*vcTypes.Interface, error)
-	RemoveInterface(inf *vcTypes.Interface) (*vcTypes.Interface, error)
-	ListInterfaces() ([]*vcTypes.Interface, error)
-	UpdateRoutes(routes []*vcTypes.Route) ([]*vcTypes.Route, error)
-	ListRoutes() ([]*vcTypes.Route, error)
+	AddInterface(inf *pbTypes.Interface) (*pbTypes.Interface, error)
+	RemoveInterface(inf *pbTypes.Interface) (*pbTypes.Interface, error)
+	ListInterfaces() ([]*pbTypes.Interface, error)
+	UpdateRoutes(routes []*pbTypes.Route) ([]*pbTypes.Route, error)
+	ListRoutes() ([]*pbTypes.Route, error)
 
 	GetOOMEvent() (string, error)
 

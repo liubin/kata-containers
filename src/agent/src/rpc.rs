@@ -80,6 +80,7 @@ impl agentService {
         let cid = req.container_id.clone();
 
         let mut oci_spec = req.OCI.clone();
+        let use_sandbox_pidns = req.get_sandbox_pidns();
 
         let sandbox;
         let mut s;
@@ -129,7 +130,7 @@ impl agentService {
         }
         info!(sl!(), "AA 3333");
 
-        update_container_namespaces(&s, &mut oci)?;
+        update_container_namespaces(&s, &mut oci, use_sandbox_pidns)?;
         info!(sl!(), "AA 4444");
 
         // Add the root partition to the device cgroup to prevent access
@@ -176,6 +177,7 @@ impl agentService {
 
         ctr.start(p)?;
 
+        s.update_shared_pidns(&ctr)?;
         s.add_container(ctr);
         info!(sl!(), "created container!");
 
@@ -1568,7 +1570,11 @@ pub fn start<S: Into<String>>(s: Arc<Mutex<Sandbox>>, host: S, port: u16) -> ttr
 // path set by the spec, since we will always ignore it. Indeed, it makes no
 // sense to rely on the namespace path provided by the host since namespaces
 // are different inside the guest.
-fn update_container_namespaces(sandbox: &Sandbox, spec: &mut Spec) -> Result<()> {
+fn update_container_namespaces(
+    sandbox: &Sandbox,
+    spec: &mut Spec,
+    sandbox_pidns: bool,
+) -> Result<()> {
     let linux = match spec.linux.as_mut() {
         None => {
             return Err(
@@ -1578,14 +1584,8 @@ fn update_container_namespaces(sandbox: &Sandbox, spec: &mut Spec) -> Result<()>
         Some(l) => l,
     };
 
-    let mut pidNs = false;
-
     let namespaces = linux.namespaces.as_mut_slice();
     for namespace in namespaces.iter_mut() {
-        if namespace.r#type == NSTYPEPID {
-            pidNs = true;
-            continue;
-        }
         if namespace.r#type == NSTYPEIPC {
             namespace.path = sandbox.shared_ipcns.path.clone();
             continue;
@@ -1595,13 +1595,19 @@ fn update_container_namespaces(sandbox: &Sandbox, spec: &mut Spec) -> Result<()>
             continue;
         }
     }
+    // update pid namespace
+    let mut pid_ns = LinuxNamespace::default();
+    pid_ns.r#type = NSTYPEPID.to_string();
 
-    if !pidNs && !sandbox.sandbox_pid_ns {
-        let mut pid_ns = LinuxNamespace::default();
-        pid_ns.r#type = NSTYPEPID.to_string();
-        linux.namespaces.push(pid_ns);
+    // Use shared pid ns if useSandboxPidns has been set in either
+    // the create_sandbox request or create_container request.
+    // Else set this to empty string so that a new pid namespace is
+    // created for the container.
+    if sandbox_pidns && sandbox.sandbox_pidns.is_some() {
+        pid_ns.path = String::from(sandbox.sandbox_pidns.as_ref().unwrap().path.as_str());
     }
 
+    linux.namespaces.push(pid_ns);
     Ok(())
 }
 

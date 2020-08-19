@@ -26,8 +26,8 @@ import (
 	"github.com/vishvananda/netns"
 	"golang.org/x/sys/unix"
 
+	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
@@ -943,19 +943,19 @@ func deleteNetNS(netNSPath string) error {
 	return nil
 }
 
-func generateVCNetworkStructures(networkNS NetworkNamespace) ([]*vcTypes.Interface, []*vcTypes.Route, []*vcTypes.ARPNeighbor, error) {
+func generateVCNetworkStructures(networkNS NetworkNamespace) ([]*pbTypes.Interface, []*pbTypes.Route, []*pbTypes.ARPNeighbor, error) {
 
 	if networkNS.NetNsPath == "" {
 		return nil, nil, nil, nil
 	}
 
-	var routes []*vcTypes.Route
-	var ifaces []*vcTypes.Interface
-	var neighs []*vcTypes.ARPNeighbor
+	var routes []*pbTypes.Route
+	var ifaces []*pbTypes.Interface
+	var neighs []*pbTypes.ARPNeighbor
 
 	for _, endpoint := range networkNS.Endpoints {
 
-		var ipAddresses []*vcTypes.IPAddress
+		var ipAddresses []*pbTypes.IPAddress
 		for _, addr := range endpoint.Properties().Addrs {
 			// Skip localhost interface
 			if addr.IP.IsLoopback() {
@@ -963,19 +963,19 @@ func generateVCNetworkStructures(networkNS NetworkNamespace) ([]*vcTypes.Interfa
 			}
 
 			netMask, _ := addr.Mask.Size()
-			ipAddress := vcTypes.IPAddress{
-				Family:  netlink.FAMILY_V4,
+			ipAddress := pbTypes.IPAddress{
+				Family:  utils.ConvertNetlinkFamily(netlink.FAMILY_V4),
 				Address: addr.IP.String(),
 				Mask:    fmt.Sprintf("%d", netMask),
 			}
 
 			if addr.IP.To4() == nil {
-				ipAddress.Family = netlink.FAMILY_V6
+				ipAddress.Family = utils.ConvertNetlinkFamily(netlink.FAMILY_V6)
 			}
 			ipAddresses = append(ipAddresses, &ipAddress)
 		}
 		noarp := endpoint.Properties().Iface.RawFlags & unix.IFF_NOARP
-		ifc := vcTypes.Interface{
+		ifc := pbTypes.Interface{
 			IPAddresses: ipAddresses,
 			Device:      endpoint.Name(),
 			Name:        endpoint.Name(),
@@ -988,7 +988,7 @@ func generateVCNetworkStructures(networkNS NetworkNamespace) ([]*vcTypes.Interfa
 		ifaces = append(ifaces, &ifc)
 
 		for _, route := range endpoint.Properties().Routes {
-			var r vcTypes.Route
+			var r pbTypes.Route
 
 			if route.Protocol == unix.RTPROT_KERNEL {
 				continue
@@ -1013,7 +1013,7 @@ func generateVCNetworkStructures(networkNS NetworkNamespace) ([]*vcTypes.Interfa
 		}
 
 		for _, neigh := range endpoint.Properties().Neighbors {
-			var n vcTypes.ARPNeighbor
+			var n pbTypes.ARPNeighbor
 
 			// We add only static ARP entries
 			if neigh.State != netlink.NUD_PERMANENT {
@@ -1021,15 +1021,15 @@ func generateVCNetworkStructures(networkNS NetworkNamespace) ([]*vcTypes.Interfa
 			}
 
 			n.Device = endpoint.Name()
-			n.State = neigh.State
-			n.Flags = neigh.Flags
+			n.State = int32(neigh.State)
+			n.Flags = int32(neigh.Flags)
 
 			if neigh.HardwareAddr != nil {
-				n.LLAddr = neigh.HardwareAddr.String()
+				n.Lladdr = neigh.HardwareAddr.String()
 			}
 
-			n.ToIPAddress = &vcTypes.IPAddress{
-				Family:  netlink.FAMILY_V4,
+			n.ToIPAddress = &pbTypes.IPAddress{
+				Family:  utils.ConvertNetlinkFamily(netlink.FAMILY_V4),
 				Address: neigh.IP.String(),
 			}
 			if neigh.IP.To4() == nil {
@@ -1271,7 +1271,7 @@ func (n *Network) Run(networkNSPath string, cb func() error) error {
 }
 
 // Add adds all needed interfaces inside the network namespace.
-func (n *Network) Add(ctx context.Context, config *NetworkConfig, hypervisor hypervisor, hotplug bool) ([]Endpoint, error) {
+func (n *Network) Add(ctx context.Context, config *NetworkConfig, s *Sandbox, hotplug bool) ([]Endpoint, error) {
 	span, _ := n.trace(ctx, "add")
 	defer span.Finish()
 
@@ -1284,24 +1284,24 @@ func (n *Network) Add(ctx context.Context, config *NetworkConfig, hypervisor hyp
 		for _, endpoint := range endpoints {
 			networkLogger().WithField("endpoint-type", endpoint.Type()).WithField("hotplug", hotplug).Info("Attaching endpoint")
 			if hotplug {
-				if err := endpoint.HotAttach(hypervisor); err != nil {
+				if err := endpoint.HotAttach(s.hypervisor); err != nil {
 					return err
 				}
 			} else {
-				if err := endpoint.Attach(hypervisor); err != nil {
+				if err := endpoint.Attach(s); err != nil {
 					return err
 				}
 			}
 
-			if !hypervisor.isRateLimiterBuiltin() {
-				rxRateLimiterMaxRate := hypervisor.hypervisorConfig().RxRateLimiterMaxRate
+			if !s.hypervisor.isRateLimiterBuiltin() {
+				rxRateLimiterMaxRate := s.hypervisor.hypervisorConfig().RxRateLimiterMaxRate
 				if rxRateLimiterMaxRate > 0 {
 					networkLogger().Info("Add Rx Rate Limiter")
 					if err := addRxRateLimiter(endpoint, rxRateLimiterMaxRate); err != nil {
 						return err
 					}
 				}
-				txRateLimiterMaxRate := hypervisor.hypervisorConfig().TxRateLimiterMaxRate
+				txRateLimiterMaxRate := s.hypervisor.hypervisorConfig().TxRateLimiterMaxRate
 				if txRateLimiterMaxRate > 0 {
 					networkLogger().Info("Add Tx Rate Limiter")
 					if err := addTxRateLimiter(endpoint, txRateLimiterMaxRate); err != nil {

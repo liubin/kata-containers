@@ -7,19 +7,22 @@ package containerdshim
 
 import (
 	"context"
+	"expvar"
 	"io"
 	"net/http"
+	"net/http/pprof"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/containerd/containerd/namespaces"
 	cdshim "github.com/containerd/containerd/runtime/v2/shim"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
+	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
+	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
-
-	"github.com/sirupsen/logrus"
 
 	"google.golang.org/grpc/codes"
 
@@ -28,8 +31,10 @@ import (
 
 var (
 	ifSupportAgentMetricsAPI = true
+	shimMgtLog               = shimLog.WithField("subsystem", "shim-management")
 )
 
+// serveMetrics handle /metrics requests
 func (s *service) serveMetrics(w http.ResponseWriter, r *http.Request) {
 
 	// update metrics from sandbox
@@ -59,9 +64,9 @@ func (s *service) serveMetrics(w http.ResponseWriter, r *http.Request) {
 	// get metrics from agent
 	agentMetrics, err := s.sandbox.GetAgentMetrics()
 	if err != nil {
-		logrus.WithError(err).Error("failed GetAgentMetrics")
-		if isGRPCErrorCode(codes.Unimplemented, err) {
-			logrus.Warn("metrics API not supportted by this agent.")
+		shimMgtLog.WithError(err).Error("failed GetAgentMetrics")
+		if isGRPCErrorCode(codes.NotFound, err) {
+			shimMgtLog.Warn("metrics API not supportted by this agent.")
 			ifSupportAgentMetricsAPI = false
 			return
 		}
@@ -74,6 +79,11 @@ func (s *service) serveMetrics(w http.ResponseWriter, r *http.Request) {
 	for _, mf := range list {
 		encoder.Encode(mf)
 	}
+
+	// collect pod overhead metrics need sleep to get the changes of cpu/memory resources usage
+	// so here only trigger the collect operation, and the data will be gathered
+	// next time collection request from Prometheus server
+	go s.setPodOverheadMetrics()
 }
 
 func decodeAgentMetrics(body string) []*dto.MetricFamily {
@@ -104,30 +114,32 @@ func decodeAgentMetrics(body string) []*dto.MetricFamily {
 	return list
 }
 
-func (s *service) startManagementServer(ctx context.Context) {
+func (s *service) startManagementServer(ctx context.Context, ociSpec *specs.Spec) {
 	// metrics socket will under sandbox's bundle path
 	metricsAddress, err := socketAddress(ctx, s.id)
 	if err != nil {
-		logrus.Errorf("failed to create socket address: %s", err.Error())
+		shimMgtLog.WithError(err).Error("failed to create socket address")
 		return
 	}
 
 	listener, err := cdshim.NewSocket(metricsAddress)
 	if err != nil {
-		logrus.Errorf("failed to create listener: %s", err.Error())
+		shimMgtLog.WithError(err).Error("failed to create listener")
 		return
 	}
 
 	// write metrics address to filesystem
 	if err := cdshim.WriteAddress("monitor_address", metricsAddress); err != nil {
-		logrus.Errorf("failed to write metrics address: %s", err.Error())
+		shimMgtLog.WithError(err).Errorf("failed to write metrics address")
 		return
 	}
 
-	logrus.Info("kata monitor inited")
+	shimMgtLog.Info("kata management inited")
 
 	// bind hanlder
-	http.HandleFunc("/metrics", s.serveMetrics)
+	m := http.NewServeMux()
+	m.Handle("/metrics", http.HandlerFunc(s.serveMetrics))
+	s.mountPprofHandle(m, ociSpec)
 
 	// register shim metrics
 	registerMetrics()
@@ -136,8 +148,30 @@ func (s *service) startManagementServer(ctx context.Context) {
 	vc.RegisterMetrics()
 
 	// start serve
-	svr := &http.Server{Handler: http.DefaultServeMux}
+	svr := &http.Server{Handler: m}
 	svr.Serve(listener)
+}
+
+// mountServeDebug provides a debug endpoint
+func (s *service) mountPprofHandle(m *http.ServeMux, ociSpec *specs.Spec) {
+
+	// return if not enabled
+	if !s.config.EnablePprof {
+		value, ok := ociSpec.Annotations[vcAnnotations.EnablePprof]
+		if !ok {
+			return
+		}
+		enabled, err := strconv.ParseBool(value)
+		if err != nil || !enabled {
+			return
+		}
+	}
+	m.Handle("/debug/vars", expvar.Handler())
+	m.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))
+	m.Handle("/debug/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
+	m.Handle("/debug/pprof/profile", http.HandlerFunc(pprof.Profile))
+	m.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
+	m.Handle("/debug/pprof/trace", http.HandlerFunc(pprof.Trace))
 }
 
 func socketAddress(ctx context.Context, id string) (string, error) {

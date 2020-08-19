@@ -21,7 +21,6 @@ type RuntimeConfigOptions struct {
 	KernelParams         string
 	MachineType          string
 	ShimPath             string
-	ProxyPath            string
 	NetmonPath           string
 	LogPath              string
 	BlockDeviceDriver    string
@@ -37,11 +36,11 @@ type RuntimeConfigOptions struct {
 	HypervisorDebug      bool
 	RuntimeDebug         bool
 	RuntimeTrace         bool
-	ProxyDebug           bool
 	ShimDebug            bool
 	NetmonDebug          bool
 	AgentDebug           bool
 	AgentTrace           bool
+	EnablePprof          bool
 }
 
 func MakeRuntimeConfigFileData(config RuntimeConfigOptions) string {
@@ -68,10 +67,6 @@ func MakeRuntimeConfigFileData(config RuntimeConfigOptions) string {
 	shared_fs = "` + config.SharedFS + `"
 	virtio_fs_daemon = "` + config.VirtioFSDaemon + `"
 
-	[proxy.kata]
-	enable_debug = ` + strconv.FormatBool(config.ProxyDebug) + `
-	path = "` + config.ProxyPath + `"
-
 	[shim.kata]
 	path = "` + config.ShimPath + `"
 	enable_debug = ` + strconv.FormatBool(config.ShimDebug) + `
@@ -89,5 +84,6 @@ func MakeRuntimeConfigFileData(config RuntimeConfigOptions) string {
 	[runtime]
 	enable_debug = ` + strconv.FormatBool(config.RuntimeDebug) + `
 	enable_tracing = ` + strconv.FormatBool(config.RuntimeTrace) + `
-	disable_new_netns= ` + strconv.FormatBool(config.DisableNewNetNs)
+	disable_new_netns= ` + strconv.FormatBool(config.DisableNewNetNs) + `
+	enable_pprof= ` + strconv.FormatBool(config.EnablePprof)
 }

@@ -10,8 +10,8 @@ import (
 	"time"
 
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"golang.org/x/net/context"
@@ -24,11 +24,6 @@ type mockAgent struct {
 
 func NewMockAgent() agent {
 	return &mockAgent{}
-}
-
-//start the proxy to watch the vm console. It does nothing.
-func (n *mockAgent) startProxy(sandbox *Sandbox) error {
-	return nil
 }
 
 // init initializes the Noop agent, i.e. it does nothing.
@@ -111,22 +106,22 @@ func (n *mockAgent) onlineCPUMem(cpus uint32, cpuOnly bool) error {
 }
 
 // updateInterface is the Noop agent Interface update implementation. It does nothing.
-func (n *mockAgent) updateInterface(inf *vcTypes.Interface) (*vcTypes.Interface, error) {
+func (n *mockAgent) updateInterface(inf *pbTypes.Interface) (*pbTypes.Interface, error) {
 	return nil, nil
 }
 
 // listInterfaces is the Noop agent Interfaces list implementation. It does nothing.
-func (n *mockAgent) listInterfaces() ([]*vcTypes.Interface, error) {
+func (n *mockAgent) listInterfaces() ([]*pbTypes.Interface, error) {
 	return nil, nil
 }
 
 // updateRoutes is the Noop agent Routes update implementation. It does nothing.
-func (n *mockAgent) updateRoutes(routes []*vcTypes.Route) ([]*vcTypes.Route, error) {
+func (n *mockAgent) updateRoutes(routes []*pbTypes.Route) ([]*pbTypes.Route, error) {
 	return nil, nil
 }
 
 // listRoutes is the Noop agent Routes list implementation. It does nothing.
-func (n *mockAgent) listRoutes() ([]*vcTypes.Route, error) {
+func (n *mockAgent) listRoutes() ([]*pbTypes.Route, error) {
 	return nil, nil
 }
 
@@ -181,11 +176,11 @@ func (n *mockAgent) resumeContainer(sandbox *Sandbox, c Container) error {
 }
 
 // configHypervisor is the Noop agent hypervisor configuration implementation. It does nothing.
-func (n *mockAgent) configure(h hypervisor, id, sharePath string, builtin bool, config interface{}) error {
+func (n *mockAgent) configure(h hypervisor, id, sharePath string, config interface{}) error {
 	return nil
 }
 
-func (n *mockAgent) configureFromGrpc(h hypervisor, id string, builtin bool, config interface{}) error {
+func (n *mockAgent) configureFromGrpc(h hypervisor, id string, config interface{}) error {
 	return nil
 }
 
@@ -204,12 +199,9 @@ func (n *mockAgent) getAgentURL() (string, error) {
 	return "", nil
 }
 
-// setProxy is the Noop agent proxy setter. It does nothing.
-func (n *mockAgent) setProxy(sandbox *Sandbox, proxy proxy, pid int, url string) error {
+// setAgentURL is the Noop agent url setter. It does nothing.
+func (n *mockAgent) setAgentURL() error {
 	return nil
-}
-
-func (n *mockAgent) setProxyFromGrpc(proxy proxy, pid int, url string) {
 }
 
 // getGuestDetails is the Noop agent GuestDetails queryer. It does nothing.
