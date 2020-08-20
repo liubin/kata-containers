@@ -10,7 +10,7 @@ use oci::{LinuxNamespace, Spec};
 use protobuf::{RepeatedField, SingularPtrField};
 use protocols::agent::{
     AgentDetails, CopyFileRequest, GuestDetailsResponse, Interfaces, ListProcessesResponse,
-    Metrics, ReadStreamResponse, Routes, StatsContainerResponse, WaitProcessResponse,
+    Metrics, OOMEvent, ReadStreamResponse, Routes, StatsContainerResponse, WaitProcessResponse,
     WriteStreamResponse,
 };
 use protocols::empty::Empty;
@@ -19,6 +19,7 @@ use protocols::health::{
 };
 use protocols::types::Interface;
 use rustjail;
+use rustjail::cgroups::notifier;
 use rustjail::container::{BaseContainer, Container, LinuxContainer};
 use rustjail::errors::*;
 use rustjail::process::Process;
@@ -175,6 +176,7 @@ impl agentService {
 
         let sandbox = self.sandbox.clone();
         let mut s = sandbox.lock().unwrap();
+        let sid = s.id.clone();
 
         let ctr: &mut LinuxContainer = match s.get_container(cid.as_str()) {
             Some(cr) => cr,
@@ -184,6 +186,15 @@ impl agentService {
         };
 
         ctr.exec()?;
+
+        // start oom event loop
+        if sid != cid && ctr.cgroup_manager.is_some() {
+            let cg_path = ctr.cgroup_manager.as_ref().unwrap().get_cg_path("memory");
+            if cg_path.is_some() {
+                let rx = notifier::notify_oom(cid.as_str(), cg_path.unwrap())?;
+                s.run_oom_event_monitor(rx, cid);
+            }
+        }
 
         Ok(())
     }
@@ -457,6 +468,7 @@ impl agentService {
         };
 
         let mut l = req.data.len();
+
         match unistd::write(fd, req.data.as_slice()) {
             Ok(v) => {
                 if v < l {
@@ -1284,6 +1296,33 @@ impl protocols::agent_ttrpc::AgentService for agentService {
                 let mut metrics = Metrics::new();
                 metrics.set_metrics(s);
                 Ok(metrics)
+            }
+        }
+    }
+
+    fn get_oom_event(
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
+        _req: protocols::agent::GetOOMEventRequest,
+    ) -> ttrpc::Result<OOMEvent> {
+        let sandbox = self.sandbox.clone();
+        let s = sandbox.lock().unwrap();
+        let event_rx = &s.event_rx.clone();
+        let event_rx = event_rx.lock().unwrap();
+        drop(s);
+        drop(sandbox);
+
+        match event_rx.recv() {
+            Err(err) => {
+                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                    ttrpc::Code::INTERNAL,
+                    err.to_string(),
+                )))
+            }
+            Ok(container_id) => {
+                let mut resp = OOMEvent::new();
+                resp.container_id = container_id;
+                return Ok(resp);
             }
         }
     }
