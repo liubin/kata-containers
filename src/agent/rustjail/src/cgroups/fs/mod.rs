@@ -1472,6 +1472,11 @@ impl Manager {
 
         Ok(())
     }
+
+    pub fn get_cg_path(&self, cg: &str) -> Option<&String> {
+        self.paths.get(cg)
+    }
+
 }
 
 pub fn get_guest_cpuset() -> Result<String> {
