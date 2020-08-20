@@ -6,7 +6,7 @@ use std::fs::{self, File};
 use std::io::Read;
 use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::path::Path;
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{self, Receiver};
 use std::thread;
 
 // Convenience macro to obtain the scope logger
@@ -58,45 +58,42 @@ fn register_memory_event(
 ) -> Result<Receiver<String>> {
     let path = Path::new(cg_dir).join(event_name);
     let event_file = File::open(path)?;
-    warn!(sl!(), "111111111");
 
     let eventfd = eventfd(0, EfdFlags::EFD_CLOEXEC)?;
 
     let event_control_path = Path::new(cg_dir).join("cgroup.event_control");
-    let data = format!("{} {} {}", eventfd, event_file.as_raw_fd(), arg);
-    warn!(sl!(), "222222");
+    let data;
+    if arg == "" {
+        data = format!("{} {}", eventfd, event_file.as_raw_fd());
+    }else {
+        data = format!("{} {} {}", eventfd, event_file.as_raw_fd(), arg);
+    }
 
     // write to file and set mode to 0700(FIXME)
     fs::write(&event_control_path, data)?;
-    warn!(sl!(), "33333333");
 
-    let mut event_file = unsafe { File::from_raw_fd(eventfd) };
-    warn!(sl!(), "444444444");
+    let mut eventfd_file = unsafe { File::from_raw_fd(eventfd) };
 
     let (sender, receiver) = mpsc::channel();
     let containere_id = cid.to_string();
 
     thread::spawn(move || {
         loop {
-            warn!(sl!(), "555555555");
             let mut buf = [0; 8];
-            match event_file.read(&mut buf) {
+            match eventfd_file.read(&mut buf) {
                 Err(err) => {
                     warn!(sl!(), "failed to read from eventfd: {:?}", err);
                     return;
                 }
                 Ok(_) => {
-                    warn!(sl!(), "666666666");
                 }
             }
 
             // When a cgroup is destroyed, an event is sent to eventfd.
             // So if the control path is gone, return instead of notifying.
             if !Path::new(&event_control_path).exists() {
-                warn!(sl!(), "777777777777");
                 return;
             }
-            warn!(sl!(), "88888888888");
             sender.send(containere_id.clone()).unwrap();
         }
     });

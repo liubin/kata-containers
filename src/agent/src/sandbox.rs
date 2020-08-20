@@ -26,19 +26,6 @@ use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
-// #[derive(Debug)]
-// pub struct EventChannel<T> {
-//     pub tx: Sender<T>,
-//     pub rx: Receiver<T>,
-// }
-
-// impl<T> EventChannel<T> {
-//     pub fn new() -> EventChannel<T> {
-//         let (tx, rx) = mpsc::channel::<T>();
-//         EventChannel { tx: tx, rx: rx }
-//     }
-// }
-
 #[derive(Debug)]
 pub struct Sandbox {
     pub logger: Logger,
@@ -59,7 +46,6 @@ pub struct Sandbox {
     pub rtnl: Option<RtnlHandle>,
     pub event_rx: Arc<Mutex<Receiver<String>>>,
     pub event_tx: Sender<String>,
-    // pub oom_events_chan: Arc<Mutex<EventChannel<String>>>,
 }
 
 impl Sandbox {
