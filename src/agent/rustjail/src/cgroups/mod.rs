@@ -1,18 +1,18 @@
-// Copyright (c) 2019 Ant Financial
+// Copyright (c) 2019,2020 Ant Financial
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 
 use crate::errors::*;
-// use crate::configs::{FreezerState, Config};
 use oci::LinuxResources;
 use protocols::agent::CgroupStats;
 use std::collections::HashMap;
 
-pub mod fs;
-pub mod systemd;
+use cgroups::freezer::FreezerState;
 
-pub type FreezerState = &'static str;
+pub mod fs;
+pub mod notifier;
+pub mod systemd;
 
 pub trait Manager {
     fn apply(&self, _pid: i32) -> Result<()> {
@@ -20,10 +20,6 @@ pub trait Manager {
     }
 
     fn get_pids(&self) -> Result<Vec<i32>> {
-        Err(ErrorKind::ErrorCode("not supported!".to_string()).into())
-    }
-
-    fn get_all_pids(&self) -> Result<Vec<i32>> {
         Err(ErrorKind::ErrorCode("not supported!".to_string()).into())
     }
 
@@ -36,10 +32,6 @@ pub trait Manager {
     }
 
     fn destroy(&mut self) -> Result<()> {
-        Err(ErrorKind::ErrorCode("not supported!".to_string()).into())
-    }
-
-    fn get_paths(&self) -> Result<HashMap<String, String>> {
         Err(ErrorKind::ErrorCode("not supported!".to_string()).into())
     }
 

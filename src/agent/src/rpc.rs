@@ -10,7 +10,7 @@ use oci::{LinuxNamespace, Spec};
 use protobuf::{RepeatedField, SingularPtrField};
 use protocols::agent::{
     AgentDetails, CopyFileRequest, GuestDetailsResponse, Interfaces, ListProcessesResponse,
-    Metrics, ReadStreamResponse, Routes, StatsContainerResponse, WaitProcessResponse,
+    Metrics, OOMEvent, ReadStreamResponse, Routes, StatsContainerResponse, WaitProcessResponse,
     WriteStreamResponse,
 };
 use protocols::empty::Empty;
@@ -19,6 +19,7 @@ use protocols::health::{
 };
 use protocols::types::Interface;
 use rustjail;
+use rustjail::cgroups::notifier;
 use rustjail::container::{BaseContainer, Container, LinuxContainer};
 use rustjail::errors::*;
 use rustjail::process::Process;
@@ -77,6 +78,7 @@ pub struct agentService {
 impl agentService {
     fn do_create_container(&self, req: protocols::agent::CreateContainerRequest) -> Result<()> {
         let cid = req.container_id.clone();
+        info!(sl!(), "++++++++   do_create_container {}", &cid);
 
         let mut oci_spec = req.OCI.clone();
         let use_sandbox_pidns = req.get_sandbox_pidns();
@@ -94,7 +96,7 @@ impl agentService {
             }
         };
 
-        info!(sl!(), "receive createcontainer {}", &cid);
+        info!(sl!(), "receive createcontainer, spec: {:?}", &oci);
 
         // re-scan PCI bus
         // looking for hidden devices
@@ -126,6 +128,7 @@ impl agentService {
 
         // Add the root partition to the device cgroup to prevent access
         update_device_cgroup(&mut oci)?;
+        info!(sl!(), "receive createcontainer, after processed spec: {:?}", &oci);
 
         // write spec to bundle path, hooks might
         // read ocispec
@@ -172,9 +175,11 @@ impl agentService {
 
     fn do_start_container(&self, req: protocols::agent::StartContainerRequest) -> Result<()> {
         let cid = req.container_id.clone();
+        info!(sl!(), "++++++++   do_start_container {}", &cid);
 
         let sandbox = self.sandbox.clone();
         let mut s = sandbox.lock().unwrap();
+        let sid = s.id.clone();
 
         let ctr: &mut LinuxContainer = match s.get_container(cid.as_str()) {
             Some(cr) => cr,
@@ -184,6 +189,15 @@ impl agentService {
         };
 
         ctr.exec()?;
+
+        // start oom event loop
+        if sid != cid && ctr.cgroup_manager.is_some() {
+            let cg_path = ctr.cgroup_manager.as_ref().unwrap().get_cg_path("memory");
+            if cg_path.is_some() {
+                let rx = notifier::notify_oom(cid.as_str(), cg_path.unwrap())?;
+                s.run_oom_event_monitor(rx, cid);
+            }
+        }
 
         Ok(())
     }
@@ -286,6 +300,7 @@ impl agentService {
     fn do_exec_process(&self, req: protocols::agent::ExecProcessRequest) -> Result<()> {
         let cid = req.container_id.clone();
         let exec_id = req.exec_id.clone();
+        info!(sl!(), "++++++++   do_exec_process {}", &cid);
 
         info!(sl!(), "cid: {} eid: {}", cid.clone(), exec_id.clone());
 
@@ -328,7 +343,7 @@ impl agentService {
             sl!(),
             "signal process";
             "container-id" => cid.clone(),
-            "exec-id" => eid.clone()
+            "exec-id" => eid.clone(),
         );
 
         if eid == "" {
@@ -345,6 +360,8 @@ impl agentService {
         if p.init && signal == Signal::SIGTERM && !is_signal_handled(p.pid, req.signal) {
             signal = Signal::SIGKILL;
         }
+
+        info!(sl!(), "find process {:?} to signal with {:?}", &p, signal);
 
         p.signal(signal)?;
 
@@ -702,6 +719,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
     ) -> ttrpc::Result<Empty> {
         let cid = req.container_id.clone();
         let res = req.resources;
+        info!(sl!(), "++++++++   update_container {}", &cid);
 
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
@@ -1284,6 +1302,34 @@ impl protocols::agent_ttrpc::AgentService for agentService {
                 let mut metrics = Metrics::new();
                 metrics.set_metrics(s);
                 Ok(metrics)
+            }
+        }
+    }
+
+    fn get_oom_event(
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
+        _req: protocols::agent::GetOOMEventRequest,
+    ) -> ttrpc::Result<OOMEvent> {
+        let sandbox = self.sandbox.clone();
+        let s = sandbox.lock().unwrap();
+        let event_rx = &s.event_rx.clone();
+        let event_rx = event_rx.lock().unwrap();
+        drop(s);
+        drop(sandbox);
+
+        match event_rx.recv() {
+            Err(err) => {
+                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                    ttrpc::Code::INTERNAL,
+                    err.to_string(),
+                )))
+            }
+            Ok(container_id) => {
+                info!(sl!(), "get_oom_event return {}", &container_id);
+                let mut resp = OOMEvent::new();
+                resp.container_id = container_id;
+                return Ok(resp);
             }
         }
     }

@@ -539,7 +539,22 @@ pub fn get_mount_fs_type_from_file(mount_file: &str, mount_point: &str) -> Resul
     .into())
 }
 
-pub fn get_cgroup_mounts(logger: &Logger, cg_path: &str) -> Result<Vec<INIT_MOUNT>> {
+pub fn get_cgroup_mounts(logger: &Logger, cg_path: &str, unified_cgroup_hierarchy: bool) -> Result<Vec<INIT_MOUNT>> {
+    // cgroup v2
+    // https://github.com/kata-containers/agent/blob/8c9bbadcd448c9a67690fbe11a860aaacc69813c/agent.go#L1249
+    if unified_cgroup_hierarchy {
+        return Ok(
+            vec![
+                INIT_MOUNT {
+                    fstype: "cgroup2",
+                    src: "cgroup2",
+                    dest: "/sys/fs/cgroup",
+                    options: vec!["nosuid", "nodev", "noexec", "relatime", "nsdelegate"],
+                }
+            ]
+        );
+	}
+
     let file = File::open(&cg_path)?;
     let reader = BufReader::new(file);
 
@@ -614,10 +629,10 @@ pub fn get_cgroup_mounts(logger: &Logger, cg_path: &str) -> Result<Vec<INIT_MOUN
     Ok(cg_mounts)
 }
 
-pub fn cgroups_mount(logger: &Logger) -> Result<()> {
+pub fn cgroups_mount(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result<()> {
     let logger = logger.new(o!("subsystem" => "mount"));
 
-    let cgroups = get_cgroup_mounts(&logger, PROC_CGROUPS)?;
+    let cgroups = get_cgroup_mounts(&logger, PROC_CGROUPS, unified_cgroup_hierarchy)?;
 
     for cg in cgroups.iter() {
         mount_to_rootfs(&logger, cg)?;

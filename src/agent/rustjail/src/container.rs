@@ -20,8 +20,8 @@ use std::clone::Clone;
 use std::fmt::Display;
 use std::process::{Child, Command};
 
-// use crate::configs::namespaces::{NamespaceType};
-use crate::cgroups::Manager as CgroupManager;
+use cgroups::freezer::FreezerState;
+
 use crate::process::Process;
 // use crate::intelrdt::Manager as RdtManager;
 use crate::errors::*;
@@ -31,6 +31,7 @@ use crate::sync::*;
 // use crate::stats::Stats;
 use crate::capabilities::{self, CAPSMAP};
 use crate::cgroups::fs::{self as fscgroup, Manager as FsManager};
+use crate::cgroups::Manager;
 use crate::{mount, validator};
 
 use protocols::agent::StatsContainerResponse;
@@ -242,9 +243,7 @@ pub trait BaseContainer {
 // Or use Mutex<xx> as a member of struct, like C?
 // a lot of String in the struct might be &str
 #[derive(Debug)]
-pub struct LinuxContainer
-// where T: CgroupManager
-{
+pub struct LinuxContainer {
     pub id: String,
     pub root: String,
     pub config: Config,
@@ -304,7 +303,7 @@ impl Container for LinuxContainer {
             self.cgroup_manager
                 .as_ref()
                 .unwrap()
-                .freeze(fscgroup::FROZEN)?;
+                .freeze(FreezerState::Frozen)?;
 
             self.status.transition(Status::PAUSED);
             return Ok(());
@@ -326,7 +325,7 @@ impl Container for LinuxContainer {
             self.cgroup_manager
                 .as_ref()
                 .unwrap()
-                .freeze(fscgroup::THAWED)?;
+                .freeze(FreezerState::Thawed)?;
 
             self.status.transition(Status::RUNNING);
             return Ok(());
@@ -357,14 +356,17 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     lazy_static::initialize(&CAPSMAP);
 
     let init = std::env::var(INIT)?.eq(format!("{}", true).as_str());
+
     let no_pivot = std::env::var(NO_PIVOT)?.eq(format!("{}", true).as_str());
     let crfd = std::env::var(CRFD_FD)?.parse::<i32>().unwrap();
     let cfd_log = std::env::var(CLOG_FD)?.parse::<i32>().unwrap();
 
+    log_child!(cfd_log, "do_init_child: init? {}", init);
     log_child!(cfd_log, "child process start run");
     let buf = read_sync(crfd)?;
     let spec_str = std::str::from_utf8(&buf)?;
     let spec: oci::Spec = serde_json::from_str(spec_str)?;
+    log_child!(cfd_log, "get sepc from parent: {:?}", &spec);
 
     log_child!(cfd_log, "notify parent to send oci process");
     write_sync(cwfd, SYNC_SUCCESS, "")?;
@@ -508,8 +510,11 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let root = fs::canonicalize(rootfs)?;
     let rootfs = root.to_str().unwrap();
 
+    log_child!(cfd_log, "do_init_child AAAAA spec {:?}", &spec);
     if to_new.contains(CloneFlags::CLONE_NEWNS) {
         // setup rootfs
+        log_child!(cfd_log, "do_init_child AAAAA paths {:?}", &cm.paths);
+        log_child!(cfd_log, "do_init_child AAAAA mounts {:?}", &cm.mounts);
         mount::init_rootfs(cfd_log, &spec, &cm.paths, &cm.mounts, bind_device)?;
     }
 
@@ -724,6 +729,7 @@ impl BaseContainer for LinuxContainer {
     }
 
     fn set(&mut self, r: LinuxResources) -> Result<()> {
+        info!(self.logger, "++++++++ container.set!");
         if self.cgroup_manager.is_some() {
             self.cgroup_manager.as_ref().unwrap().set(&r, true)?;
         }
@@ -739,6 +745,7 @@ impl BaseContainer for LinuxContainer {
     }
 
     fn start(&mut self, mut p: Process) -> Result<()> {
+        info!(self.logger, "++++++++ container.start!");
         let logger = self.logger.new(o!("eid" => p.exec_id.clone()));
         let tty = p.tty;
         let fifo_file = format!("{}/{}", &self.root, EXEC_FIFO_FILENAME);
@@ -759,7 +766,7 @@ impl BaseContainer for LinuxContainer {
         }
         info!(logger, "exec fifo opened!");
 
-        fscgroup::init_static();
+        // fscgroup::init_static();
 
         if self.config.spec.is_none() {
             return Err(ErrorKind::ErrorCode("no spec".to_string()).into());
@@ -944,6 +951,7 @@ impl BaseContainer for LinuxContainer {
     }
 
     fn run(&mut self, p: Process) -> Result<()> {
+        info!(self.logger, "++++++++ container.run!");
         let init = p.init;
         self.start(p)?;
 
@@ -989,6 +997,7 @@ impl BaseContainer for LinuxContainer {
     }
 
     fn exec(&mut self) -> Result<()> {
+        info!(self.logger, "++++++++ container.exec!");
         let fifo = format!("{}/{}", &self.root, EXEC_FIFO_FILENAME);
         let fd = fcntl::open(fifo.as_str(), OFlag::O_WRONLY, Mode::from_bits_truncate(0))?;
         let data: &[u8] = &[0];
@@ -1333,6 +1342,7 @@ impl LinuxContainer {
         };
 
         let cgroup_manager = FsManager::new(cpath.as_str())?;
+        info!(logger, "new cgroup_manager {:?}", &cgroup_manager);
 
         Ok(LinuxContainer {
             id: id.clone(),
