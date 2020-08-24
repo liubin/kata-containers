@@ -14,7 +14,8 @@ use netlink::{RtnlHandle, NETLINK_ROUTE};
 use oci::{Hook, Hooks};
 use protocols::agent::OnlineCPUMemRequest;
 use regex::Regex;
-use rustjail::cgroups;
+use cgroups;
+use rustjail::cgroups as rustjail_cgroups;
 use rustjail::container::BaseContainer;
 use rustjail::container::LinuxContainer;
 use rustjail::errors::*;
@@ -24,7 +25,9 @@ use std::collections::HashMap;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{Arc, Mutex};
+use std::thread;
 
 #[derive(Debug)]
 pub struct Sandbox {
@@ -45,12 +48,16 @@ pub struct Sandbox {
     pub sender: Option<Sender<i32>>,
     pub rtnl: Option<RtnlHandle>,
     pub hooks: Option<Hooks>,
+    pub event_rx: Arc<Mutex<Receiver<String>>>,
+    pub event_tx: Sender<String>,
 }
 
 impl Sandbox {
     pub fn new(logger: &Logger) -> Result<Self> {
         let fs_type = get_mount_fs_type("/")?;
         let logger = logger.new(o!("subsystem" => "sandbox"));
+        let (tx, rx) = mpsc::channel::<String>();
+        let event_rx = Arc::new(Mutex::new(rx));
 
         Ok(Sandbox {
             logger: logger.clone(),
@@ -70,6 +77,8 @@ impl Sandbox {
             sender: None,
             rtnl: Some(RtnlHandle::new(NETLINK_ROUTE, 0).unwrap()),
             hooks: None,
+            event_rx: event_rx,
+            event_tx: tx,
         })
     }
 
@@ -244,6 +253,9 @@ impl Sandbox {
 
     pub fn online_cpu_memory(&self, req: &OnlineCPUMemRequest) -> Result<()> {
         if req.nb_cpus > 0 {
+            // FIXME delete test code
+            use std::{thread, time};
+            thread::sleep(time::Duration::from_secs(1));
             // online cpus
             online_cpus(&self.logger, req.nb_cpus as i32)?;
         }
@@ -253,7 +265,7 @@ impl Sandbox {
             online_memory(&self.logger)?;
         }
 
-        let cpuset = cgroups::fs::get_guest_cpuset()?;
+        let cpuset = rustjail_cgroups::fs::get_guest_cpuset()?;
 
         for (_, ctr) in self.containers.iter() {
             info!(self.logger, "updating {}", ctr.id.as_str());
@@ -316,6 +328,21 @@ impl Sandbox {
 
         Ok(hooks)
     }
+
+    pub fn run_oom_event_monitor(&self, rx: Receiver<String>, container_id: String) {
+        let tx = self.event_tx.clone();
+        let logger = self.logger.clone();
+
+        thread::spawn(move || {
+            for event in rx {
+                info!(logger, "got an OOM event {:?}", event);
+                match tx.send(container_id.clone()) {
+                    Err(err) => error!(logger, "failed to send message: {:?}", err),
+                    Ok(_) => {}
+                }
+            }
+        });
+    }
 }
 
 fn online_resources(logger: &Logger, path: &str, pattern: &str, num: i32) -> Result<i32> {
@@ -330,8 +357,9 @@ fn online_resources(logger: &Logger, path: &str, pattern: &str, num: i32) -> Res
 
         if re.is_match(name) {
             let file = format!("{}/{}", p.to_str().unwrap(), SYSFS_ONLINE_FILE);
-            info!(logger, "{}", file.as_str());
+            info!(logger, "try to read online file {}", file.as_str());
             let c = fs::read_to_string(file.as_str())?;
+            info!(logger, "read {} content {}", file.as_str(), &c);
 
             if c.trim().contains("0") {
                 fs::write(file.as_str(), "1")?;
