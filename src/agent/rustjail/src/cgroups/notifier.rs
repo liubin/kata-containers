@@ -137,7 +137,7 @@ fn register_memory_event(
     arg: &str,
 ) -> Result<Receiver<String>> {
     let path = Path::new(&cg_dir).join(event_name);
-    let event_file = File::open(path)?;
+    let event_file = File::open(path.clone())?;
 
     let eventfd = eventfd(0, EfdFlags::EFD_CLOEXEC)?;
 
@@ -166,6 +166,10 @@ fn register_memory_event(
                     return;
                 }
                 Ok(_) => {
+                    // FIXME debug code.
+                    let s = fs::read_to_string(path.clone());
+                    info!(sl!(), "OOM event for container: {:?}", s);
+
                     info!(sl!(), "OOM event for container: {}", &containere_id);
                 }
             }

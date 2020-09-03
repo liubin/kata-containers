@@ -249,6 +249,9 @@ impl Sandbox {
 
     pub fn online_cpu_memory(&self, req: &OnlineCPUMemRequest) -> Result<()> {
         if req.nb_cpus > 0 {
+            // FIXME delete test code
+            use std::{thread, time};
+            thread::sleep(time::Duration::from_secs(1));
             // online cpus
             online_cpus(&self.logger, req.nb_cpus as i32)?;
         }
