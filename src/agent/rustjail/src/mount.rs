@@ -137,7 +137,6 @@ pub fn init_rootfs(
     )?;
 
     for m in &spec.mounts {
-        log_child!(cfd_log, "mount spec.mounts: {:?}", &m);
         let (mut flags, data) = parse_mount(&m);
         if !m.destination.starts_with("/") || m.destination.contains("..") {
             return Err(ErrorKind::Nix(nix::Error::Sys(Errno::EINVAL)).into());
@@ -555,8 +554,6 @@ fn mount_from(
     let d = String::from(data);
     let dest = format!("{}{}", rootfs, &m.destination);
 
-    log_child!(cfd_log, "mount_from, Mount: {:?} , dest: {} ", &m, &dest);
-
     let src = if m.r#type.as_str() == "bind" {
         let src = fs::canonicalize(m.source.as_str())?;
         let dir = if src.is_file() {
@@ -604,8 +601,6 @@ fn mount_from(
             );
         }
     }
-
-    log_child!(cfd_log, "mount: from {:?} to {:?} type {:?}", &src, &dest, &m.r#type);
 
     match mount::mount(
         Some(src.as_str()),

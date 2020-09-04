@@ -191,38 +191,36 @@ impl CgroupManager for Manager {
                 MaxValue::Max
             };
             pid_controller.set_pid_max(v);
-            // res.pid.maximum_number_of_processes = v;
-            // res.pid.update_values = true;
         }
 
         if r.block_io.is_some() {
-            info!(sl!(), "cgroup manager set block !!!");
+            info!(sl!(), "cgroup manager set block io");
             res.blkio.update_values = true;
             let blkio = r.block_io.as_ref().unwrap();
 
-            // let blkio_controller: &BlkIoController = cg.controller_of().unwrap();
-
-            let weight= blkio.weight.unwrap_or(0) as u16;
-            if weight !=0{
-                res.blkio.weight = weight;
-            }
-
-            let leaf_weight= blkio.leaf_weight.unwrap_or(0) as u16;
-            if leaf_weight !=0{
-                res.blkio.leaf_weight = leaf_weight;
+            if cg.v2() {
+                res.blkio.weight =  convert_blk_io_to_v2_value(blkio.weight);
+                res.blkio.leaf_weight =  convert_blk_io_to_v2_value(blkio.leaf_weight);
+            } else {
+                res.blkio.weight = blkio.weight;
+                res.blkio.leaf_weight = blkio.leaf_weight;
             }
 
             let mut vec = vec![];
             for d in blkio.weight_device.iter() {
-                if d.weight.is_some() && d.leaf_weight.is_some() {
-                    let dr = BlkIoDeviceResource {
-                        major: d.blk.major as u64,
-                        minor: d.blk.minor as u64,
-                        weight: d.weight.unwrap() as u16,
-                        leaf_weight: d.leaf_weight.unwrap() as u16,
-                    };
-                    vec.push(dr);
+                let mut w = blkio.weight;
+                let mut lw = blkio.leaf_weight;
+                if cg.v2() {
+                    w =  convert_blk_io_to_v2_value(blkio.weight);
+                    lw =  convert_blk_io_to_v2_value(blkio.leaf_weight);
                 }
+                let dr = BlkIoDeviceResource {
+                    major: d.blk.major as u64,
+                    minor: d.blk.minor as u64,
+                    weight: w,
+                    leaf_weight: lw,
+                };
+                vec.push(dr);
             }
             res.blkio.weight_device = vec;
 
@@ -231,7 +229,7 @@ impl CgroupManager for Manager {
                 let tr = BlkIoDeviceThrottleResource {
                     major: d.blk.major as u64,
                     minor: d.blk.minor as u64,
-                    rate: d.rate as u64,
+                    rate: d.rate,
                 };
                 vec.push(tr);
             }
@@ -242,7 +240,7 @@ impl CgroupManager for Manager {
                 let tr = BlkIoDeviceThrottleResource {
                     major: d.blk.major as u64,
                     minor: d.blk.minor as u64,
-                    rate: d.rate as u64,
+                    rate: d.rate,
                 };
                 vec.push(tr);
             }
@@ -253,7 +251,7 @@ impl CgroupManager for Manager {
                 let tr = BlkIoDeviceThrottleResource {
                     major: d.blk.major as u64,
                     minor: d.blk.minor as u64,
-                    rate: d.rate as u64,
+                    rate: d.rate,
                 };
                 vec.push(tr);
             }
@@ -264,7 +262,7 @@ impl CgroupManager for Manager {
                 let tr = BlkIoDeviceThrottleResource {
                     major: d.blk.major as u64,
                     minor: d.blk.minor as u64,
-                    rate: d.rate as u64,
+                    rate: d.rate,
                 };
                 vec.push(tr);
             }
@@ -335,10 +333,14 @@ impl CgroupManager for Manager {
     }
 
     fn get_stats(&self) -> Result<CgroupStats> {
-        // CpuStats
-        let cpu_usage = get_cpuacct_stats(&self.cpath, &self.rels);
+        let h = cgroups::hierarchies::auto();
+        let h = Box::new(&*h);
+        let cg = load_or_create(h, &self.cpath, self.rels.clone());
 
-        let throttling_data = get_cpu_stats(&self.cpath, &self.rels);
+        // CpuStats
+        let cpu_usage = get_cpuacct_stats(&cg);
+
+        let throttling_data = get_cpu_stats(&cg);
 
         let cpu_stats = SingularPtrField::some(CpuStats {
             cpu_usage,
@@ -348,17 +350,17 @@ impl CgroupManager for Manager {
         });
 
         // Memorystats
-        let memory_stats = get_memory_stats(&self.cpath, &self.rels);
+        let memory_stats = get_memory_stats(&cg);
 
         // PidsStats
-        let pids_stats = get_pids_stats(&self.cpath, &self.rels);
+        let pids_stats = get_pids_stats(&cg);
 
         // BlkioStats
         // note that virtiofs has no blkio stats
-        let blkio_stats = get_blkio_stats(&self.cpath, &self.rels);
+        let blkio_stats = get_blkio_stats(&cg);
 
         // HugetlbStats
-        let hugetlb_stats = get_hugetlb_stats(&self.cpath, &self.rels);
+        let hugetlb_stats = get_hugetlb_stats(&cg);
 
         Ok(CgroupStats {
             cpu_stats,
@@ -503,7 +505,6 @@ lazy_static! {
         n as f64
     };
 
-    // FIXME chagne to cgroup::DeviceResource
     pub static ref DEFAULT_ALLOWED_DEVICES: Vec<LinuxDeviceCgroup> = {
         let mut v = Vec::new();
         v.push(LinuxDeviceCgroup {
@@ -558,10 +559,7 @@ lazy_static! {
     };
 }
 
-fn get_cpu_stats(dir: &str, relative_paths: &HashMap<String, String>) -> SingularPtrField<ThrottlingData> {
-    let h = cgroups::hierarchies::auto();
-    let h = Box::new(&*h);
-    let cg = load_or_create(h, dir, relative_paths.clone());
+fn get_cpu_stats(cg: &cgroups::Cgroup) -> SingularPtrField<ThrottlingData> {
     let cpu_controller: &CpuController = cg.controller_of().unwrap();
 
     let stat = cpu_controller.cpu().stat;
@@ -577,10 +575,7 @@ fn get_cpu_stats(dir: &str, relative_paths: &HashMap<String, String>) -> Singula
     })
 }
 
-fn get_cpuacct_stats(dir: &str, relative_paths: &HashMap<String, String>) -> SingularPtrField<CpuUsage> {
-    let h = cgroups::hierarchies::auto();
-    let h = Box::new(&*h);
-    let cg = load_or_create(h, dir, relative_paths.clone());
+fn get_cpuacct_stats(cg: &cgroups::Cgroup) -> SingularPtrField<CpuUsage> {
     let cpuacct_controller: Option<&CpuAcctController> = cg.controller_of();
     if cpuacct_controller.is_none() {
         if cg.v2() {
@@ -636,10 +631,7 @@ fn get_cpuacct_stats(dir: &str, relative_paths: &HashMap<String, String>) -> Sin
     })
 }
 
-fn get_memory_stats(dir: &str, relative_paths: &HashMap<String, String>) -> SingularPtrField<MemoryStats> {
-    let h = cgroups::hierarchies::auto();
-    let h = Box::new(&*h);
-    let cg = load_or_create(h, dir, relative_paths.clone());
+fn get_memory_stats(cg: &cgroups::Cgroup) -> SingularPtrField<MemoryStats> {
     let memory_controller: &MemController = cg.controller_of().unwrap();
 
     // cache from memory stat
@@ -696,10 +688,7 @@ fn get_memory_stats(dir: &str, relative_paths: &HashMap<String, String>) -> Sing
     })
 }
 
-fn get_pids_stats(dir: &str, relative_paths: &HashMap<String, String>) -> SingularPtrField<PidsStats> {
-    let h = cgroups::hierarchies::auto();
-    let h = Box::new(&*h);
-    let cg = load_or_create(h, dir, relative_paths.clone());
+fn get_pids_stats(cg: &cgroups::Cgroup) -> SingularPtrField<PidsStats> {
     let pid_controller: &PidController = cg.controller_of().unwrap();
 
     let current = pid_controller.get_pid_current().unwrap_or(0);
@@ -723,7 +712,7 @@ fn get_pids_stats(dir: &str, relative_paths: &HashMap<String, String>) -> Singul
 }
 
 /*
-examples(from runc):
+examples(from runc, cgroup v1):
 
     blkio.sectors
     8:0 6792
@@ -782,56 +771,52 @@ fn get_blkio_stat_ioservice(services: &Vec<IoService>) -> RepeatedField<BlkioSta
     }
 
     for s in services {
-        // FIXME lost discard
-        // https://docs.rs/cgroups/0.1.0/src/cgroups/blkio.rs.html#74
-
-        // Read
-        m.push(BlkioStatsEntry {
-            major: s.major as u64,
-            minor: s.minor as u64,
-            op: "Read".to_string(),
-            value: s.read,
-            unknown_fields: UnknownFields::default(),
-            cached_size: CachedSize::default(),
-        });
-
-        // Write
-        m.push(BlkioStatsEntry {
-            major: s.major as u64,
-            minor: s.minor as u64,
-            op: "Write".to_string(),
-            value: s.write,
-            unknown_fields: UnknownFields::default(),
-            cached_size: CachedSize::default(),
-        });
-
-        // Sync
-        m.push(BlkioStatsEntry {
-            major: s.major as u64,
-            minor: s.minor as u64,
-            op: "Sync".to_string(),
-            value: s.sync,
-            unknown_fields: UnknownFields::default(),
-            cached_size: CachedSize::default(),
-        });
-
-        // Async
-        m.push(BlkioStatsEntry {
-            major: s.major as u64,
-            minor: s.minor as u64,
-            op: "Async".to_string(),
-            value: s.r#async,
-            unknown_fields: UnknownFields::default(),
-            cached_size: CachedSize::default(),
-        });
+        m.push(build_blkio_stats_entry(s.major, s.minor, "read", s.read));
+        m.push(build_blkio_stats_entry(s.major, s.minor, "write", s.write));
+        m.push(build_blkio_stats_entry(s.major, s.minor, "sync", s.sync));
+        m.push(build_blkio_stats_entry(s.major, s.minor, "async", s.r#async));
     }
     m
 }
 
-fn get_blkio_stats(dir: &str, relative_paths: &HashMap<String, String>) -> SingularPtrField<BlkioStats> {
-    let h = cgroups::hierarchies::auto();
-    let h = Box::new(&*h);
-    let cg = load_or_create(h, dir, relative_paths.clone());
+fn build_blkio_stats_entry(major: i16, minor: i16, op: &str, value: u64 ) -> BlkioStatsEntry {
+    BlkioStatsEntry {
+        major: major as u64,
+        minor: minor as u64,
+        op: op.to_string(),
+        value: value,
+        unknown_fields: UnknownFields::default(),
+        cached_size: CachedSize::default(),
+    }
+}
+
+fn get_blkio_stats_v2(cg: &cgroups::Cgroup) -> SingularPtrField<BlkioStats> {
+    let blkio_controller: &BlkIoController = cg.controller_of().unwrap();
+    let blkio = blkio_controller.blkio();
+
+    let mut resp = BlkioStats::new();
+    let mut blkio_stats = RepeatedField::new();
+
+    let stat = blkio.io_stat;
+    for s in stat {
+        blkio_stats.push(build_blkio_stats_entry(s.major, s.minor, "read", s.rbytes));
+        blkio_stats.push(build_blkio_stats_entry(s.major, s.minor, "write", s.wbytes));
+        blkio_stats.push(build_blkio_stats_entry(s.major, s.minor, "rios", s.rios));
+        blkio_stats.push(build_blkio_stats_entry(s.major, s.minor, "wios", s.wios));
+        blkio_stats.push(build_blkio_stats_entry(s.major, s.minor, "dbytes", s.dbytes));
+        blkio_stats.push(build_blkio_stats_entry(s.major, s.minor, "dios", s.dios));
+    }
+
+    resp.io_service_bytes_recursive = blkio_stats;
+
+    SingularPtrField::some(resp)
+}
+
+fn get_blkio_stats(cg: &cgroups::Cgroup) -> SingularPtrField<BlkioStats> {
+    if cg.v2() {
+        return get_blkio_stats_v2(&cg);
+    }
+
     let blkio_controller: &BlkIoController = cg.controller_of().unwrap();
     let blkio = blkio_controller.blkio();
 
@@ -863,11 +848,7 @@ fn get_blkio_stats(dir: &str, relative_paths: &HashMap<String, String>) -> Singu
     SingularPtrField::some(m)
 }
 
-fn get_hugetlb_stats(dir: &str, relative_paths: &HashMap<String, String>) -> HashMap<String, HugetlbStats> {
-    let h = cgroups::hierarchies::auto();
-    let h = Box::new(&*h);
-    let cg = load_or_create(h, dir, relative_paths.clone());
-
+fn get_hugetlb_stats(cg: &cgroups::Cgroup) -> HashMap<String, HugetlbStats> {
     let mut h = HashMap::new();
 
     let hugetlb_controller: Option<&HugeTlbController> = cg.controller_of();
@@ -1053,12 +1034,19 @@ impl Manager {
 }
 
 pub fn get_guest_cpuset() -> Result<String> {
-    let m = get_mounts()?;
+    // for cgroup v2
+    if cgroups::hierarchies::is_cgroup2_unified_mode() {
+        let c = fs::read_to_string("/sys/fs/cgroup/cpuset.cpus.effective")?;
+        return Ok(c);
+    }
 
+    // for cgroup v1
+    let m = get_mounts()?;
     if m.get("cpuset").is_none() {
         warn!(sl!(), "no cpuset cgroup!");
         return Err(nix::Error::Sys(Errno::ENOENT).into());
     }
+
     let p = format!("{}/cpuset.cpus", m.get("cpuset").unwrap());
     let c = fs::read_to_string(p.as_str())?;
     Ok(c)
@@ -1103,4 +1091,18 @@ fn convert_memory_swap_to_v2_value(memory_swap: i64, memory: i64) -> Result<i64>
         return Err(ErrorKind::ErrorCode("memory+swap limit should be >= memory limit".to_string()).into());
     }
     Ok(memory_swap - memory)
+}
+
+// Since the OCI spec is designed for cgroup v1, in some cases
+// there is need to convert from the cgroup v1 configuration to cgroup v2
+// the formula for BlkIOWeight is y = (1 + (x - 10) * 9999 / 990)
+// convert linearly from [10-1000] to [1-10000]
+// https://github.com/opencontainers/runc/blob/a5847db387ae28c0ca4ebe4beee1a76900c86414/libcontainer/cgroups/utils.go#L382
+fn convert_blk_io_to_v2_value(blk_io_weight: Option<u16>) -> Option<u16> {
+    let v = blk_io_weight.unwrap_or(0);
+    if v != 0 {
+        return None
+    }
+
+    Some(1 + ( v-10)*9999/990 as u16)
 }

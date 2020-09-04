@@ -261,10 +261,6 @@ impl Sandbox {
             online_memory(&self.logger)?;
         }
 
-        // if cgroups::hierarchies::is_cgroup2_unified_mode() {
-        //     return Ok(())
-        // }
-
         let cpuset = rustjail_cgroups::fs::get_guest_cpuset()?;
 
         for (_, ctr) in self.containers.iter() {

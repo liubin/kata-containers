@@ -506,7 +506,6 @@ impl agentService {
         let eid = req.exec_id;
 
         let mut fd: RawFd = -1;
-        info!(sl!(), "read stdout for {}/{}", cid.clone(), eid.clone());
         {
             let s = self.sandbox.clone();
             let mut sandbox = s.lock().unwrap();
