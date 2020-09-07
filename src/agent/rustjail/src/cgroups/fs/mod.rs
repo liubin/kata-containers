@@ -43,20 +43,20 @@ macro_rules! sl {
     };
 }
 
-pub fn load_or_create<'a>(h: Box<&'a dyn cgroups::Hierarchy>, path: &str, relative_paths: HashMap<String, String>) -> Cgroup<'a> {
+pub fn load_or_create<'a>(h: Box<&'a dyn cgroups::Hierarchy>, path: &str) -> Cgroup<'a> {
     let valid_path = path.trim_start_matches("/").to_string();
-    let cg = load(h.clone(), &valid_path, relative_paths.clone());
-    if cg.is_none(){
-        info!(sl!(), "create new cgroup: {}, relative_paths: {:?}", &valid_path, &relative_paths);
-        cgroups::Cgroup::new_with_relative_paths(h, valid_path.as_str(), relative_paths)
-    }else{
+    let cg = load(h.clone(), &valid_path);
+    if cg.is_none() {
+        info!(sl!(), "create new cgroup: {}", &valid_path);
+        cgroups::Cgroup::new(h, valid_path.as_str())
+    } else {
         cg.unwrap()
     }
 }
 
-pub fn load<'a>(h: Box<&'a dyn cgroups::Hierarchy>, path: &str, relative_paths: HashMap<String, String>) -> Option<Cgroup<'a>> {
+pub fn load<'a>(h: Box<&'a dyn cgroups::Hierarchy>, path: &str) -> Option<Cgroup<'a>> {
     let valid_path = path.trim_start_matches("/").to_string();
-    let cg = cgroups::Cgroup::load_with_relative_paths(h, valid_path.as_str(), relative_paths);
+    let cg = cgroups::Cgroup::load(h, valid_path.as_str());
     let cpu_controller: &CpuController = cg.controller_of().unwrap();
     if cpu_controller.exists() {
         Some(cg)
@@ -77,7 +77,7 @@ impl CgroupManager for Manager {
     fn apply(&self, pid: pid_t) -> Result<()> {
         let h = cgroups::hierarchies::auto();
         let h = Box::new(&*h);
-        let cg = load_or_create(h, &self.cpath, self.rels.clone());
+        let cg = load_or_create(h, &self.cpath);
         cg.add_task(CgroupPid::from(pid as u64));
         Ok(())
     }
@@ -85,7 +85,7 @@ impl CgroupManager for Manager {
     fn set(&self, r: &LinuxResources, update: bool) -> Result<()> {
         let h = cgroups::hierarchies::auto();
         let h = Box::new(&*h);
-        let cg = load_or_create(h, &self.cpath, self.rels.clone());
+        let cg = load_or_create(h, &self.cpath);
         info!(sl!(), "cgroup manager set : {:?}", r);
 
         let res = &mut cgroups::Resources::default();
@@ -335,7 +335,7 @@ impl CgroupManager for Manager {
     fn get_stats(&self) -> Result<CgroupStats> {
         let h = cgroups::hierarchies::auto();
         let h = Box::new(&*h);
-        let cg = load_or_create(h, &self.cpath, self.rels.clone());
+        let cg = load_or_create(h, &self.cpath);
 
         // CpuStats
         let cpu_usage = get_cpuacct_stats(&cg);
@@ -376,7 +376,7 @@ impl CgroupManager for Manager {
     fn freeze(&self, state: FreezerState) -> Result<()> {
         let h = cgroups::hierarchies::auto();
         let h = Box::new(&*h);
-        let cg = load_or_create(h, &self.cpath, self.rels.clone());
+        let cg = load_or_create(h, &self.cpath);
         let freezer_controller: &FreezerController = cg.controller_of().unwrap();
         match state {
             FreezerState::Thawed => {
@@ -396,7 +396,7 @@ impl CgroupManager for Manager {
     fn destroy(&mut self) -> Result<()> {
         let h = cgroups::hierarchies::auto();
         let h = Box::new(&*h);
-        let cg = load(h, &self.cpath, self.rels.clone());
+        let cg = load(h, &self.cpath);
         if cg.is_some() {
             cg.unwrap().delete();
         }
@@ -406,7 +406,7 @@ impl CgroupManager for Manager {
     fn get_pids(&self) -> Result<Vec<pid_t>> {
         let h = cgroups::hierarchies::auto();
         let h = Box::new(&*h);
-        let cg = load_or_create(h, &self.cpath, self.rels.clone());
+        let cg = load_or_create(h, &self.cpath);
         let mem_controller: &MemController = cg.controller_of().unwrap();
         let pids = mem_controller.tasks();
         let result = pids.iter().map(|x| x.pid as i32).collect::<Vec<i32>>();
@@ -973,11 +973,11 @@ impl Manager {
         if cpuset_cpus == "" {
             return Ok(());
         }
+        info!(sl!(), "update_cpuset_path to: {}", cpuset_cpus);
 
         let h = cgroups::hierarchies::auto();
         let h = Box::new(&*h);
-        let root_cg = load_or_create(h, "", self.rels.clone());
-        info!(sl!(), "update_cpuset_path to: {}", cpuset_cpus);
+        let root_cg = load_or_create(h, "");
 
         let root_cpuset_controller: &CpuSetController = root_cg.controller_of().unwrap();
         let path = root_cpuset_controller.path();
@@ -986,7 +986,7 @@ impl Manager {
 
         let h = cgroups::hierarchies::auto();
         let h = Box::new(&*h);
-        let cg = load_or_create(h, &self.cpath, self.rels.clone());
+        let cg = load_or_create(h, &self.cpath);
         let cpuset_controller: &CpuSetController = cg.controller_of().unwrap();
         let path = cpuset_controller.path();
         let container_path = Path::new(path);
@@ -1011,9 +1011,11 @@ impl Manager {
             i = i - 1;
             let h = cgroups::hierarchies::auto();
             let h = Box::new(&*h);
-            // FIXME
-            let r_path= &paths[i].to_str().unwrap().replace("/sys/fs/cgroup/cpuset","");
-            let cg = load_or_create(h, &r_path, self.rels.clone());
+
+            // remove cgroup root from path
+            let r_path= &paths[i].to_str().unwrap().trim_start_matches(root_path.to_str().unwrap());
+            info!(sl!(), "updating cpuset for path {:?}", &r_path);
+            let cg = load_or_create(h, &r_path);
             let cpuset_controller: &CpuSetController = cg.controller_of().unwrap();
             cpuset_controller.set_cpus(cpuset_cpus);
         }
@@ -1028,7 +1030,7 @@ impl Manager {
             return Some(cg_path);
         }
 
-        // v1
+        // for cgroup v1
         self.paths.get(cg).map(|s| s.to_string())
     }
 }

@@ -123,6 +123,7 @@ checksum = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 [[package]]
 name = "cgroups"
 version = "0.1.1-alpha.0"
+source = "git+https://github.com/liubin/cgroups-rs#2bfd5150bae51f4e1e784b628b08cd572f360eac"
 dependencies = [
  "libc",
  "log",

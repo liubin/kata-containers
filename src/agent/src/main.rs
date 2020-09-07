@@ -191,9 +191,9 @@ fn main() -> Result<()> {
 
     // FIXME debug code
     let mmm = cgroups::fs::get_mounts()?;
-    error!(logger, "main entrypoint get mounts {:?}", mmm);
+    info!(logger, "main entrypoint get mounts {:?}", mmm);
     let mmm = cgroups::fs::get_paths()?;
-    error!(logger, "main entrypoint get paths {:?}", mmm);
+    info!(logger, "main entrypoint get paths {:?}", mmm);
 
     if args.len() == 2 && args[1] == "--version" {
         // force logger to flush

@@ -31,7 +31,7 @@ pub fn notify_oom(cid: &str, cg_dir: String) -> Result<Receiver<String>> {
 
 fn get_value_from_cgroup(path: &PathBuf, key:&str) -> Result<i64>  {
     let content = fs::read_to_string(path)?;
-    info!(sl!(), "get_value_from_cgroup filr: {:?}, content: {}", &path, &content);
+    info!(sl!(), "get_value_from_cgroup file: {:?}, content: {}", &path, &content);
 
     for line in content.lines() {
         let arr: Vec<&str> = line.split(" ").collect();

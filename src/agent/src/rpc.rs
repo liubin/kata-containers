@@ -180,7 +180,6 @@ impl agentService {
 
     fn do_start_container(&self, req: protocols::agent::StartContainerRequest) -> Result<()> {
         let cid = req.container_id.clone();
-        info!(sl!(), "++++++++   do_start_container {}", &cid);
 
         let sandbox = self.sandbox.clone();
         let mut s = sandbox.lock().unwrap();

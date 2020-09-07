@@ -362,12 +362,10 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let crfd = std::env::var(CRFD_FD)?.parse::<i32>().unwrap();
     let cfd_log = std::env::var(CLOG_FD)?.parse::<i32>().unwrap();
 
-    log_child!(cfd_log, "do_init_child: init? {}", init);
     log_child!(cfd_log, "child process start run");
     let buf = read_sync(crfd)?;
     let spec_str = std::str::from_utf8(&buf)?;
     let spec: oci::Spec = serde_json::from_str(spec_str)?;
-    log_child!(cfd_log, "get sepc from parent: {:?}", &spec);
 
     log_child!(cfd_log, "notify parent to send oci process");
     write_sync(cwfd, SYNC_SUCCESS, "")?;
@@ -380,6 +378,8 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     let buf = read_sync(crfd)?;
     let cm_str = std::str::from_utf8(&buf)?;
+    log_child!(cfd_log, "get cgroup manager from parent: {:?}", &cm_str);
+
     let cm: FsManager = serde_json::from_str(cm_str)?;
 
     let p = if spec.process.is_some() {
@@ -511,11 +511,10 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let root = fs::canonicalize(rootfs)?;
     let rootfs = root.to_str().unwrap();
 
-    log_child!(cfd_log, "do_init_child AAAAA spec {:?}", &spec);
     if to_new.contains(CloneFlags::CLONE_NEWNS) {
         // setup rootfs
-        log_child!(cfd_log, "do_init_child AAAAA paths {:?}", &cm.paths);
-        log_child!(cfd_log, "do_init_child AAAAA mounts {:?}", &cm.mounts);
+        log_child!(cfd_log, "cgroup manager paths for new container {:?}", &cm.paths);
+        log_child!(cfd_log, "cgroup manager mounts for new container {:?}", &cm.mounts);
         mount::init_rootfs(cfd_log, &spec, &cm.paths, &cm.mounts, bind_device)?;
     }
 
@@ -730,7 +729,6 @@ impl BaseContainer for LinuxContainer {
     }
 
     fn set(&mut self, r: LinuxResources) -> Result<()> {
-        info!(self.logger, "++++++++ container.set!");
         if self.cgroup_manager.is_some() {
             self.cgroup_manager.as_ref().unwrap().set(&r, true)?;
         }
@@ -1146,7 +1144,7 @@ fn join_namespaces(
     p: &Process,
     cm: &FsManager,
     st: &OCIState,
-    child: &mut Child,
+    _child: &mut Child,
     pwfd: RawFd,
     prfd: RawFd,
 ) -> Result<()> {
@@ -1371,48 +1369,6 @@ impl LinuxContainer {
     fn load<T: Into<String>>(_id: T, _base: T) -> Result<Self> {
         Err(ErrorKind::ErrorCode("not supported".to_string()).into())
     }
-    /*
-        fn new_parent_process(&self, p: &Process) -> Result<Box<ParentProcess>> {
-            let (pfd, cfd) = socket::socketpair(AddressFamily::Unix,
-                            SockType::Stream, SockProtocol::Tcp,
-                            SockFlag::SOCK_CLOEXEC)?;
-
-            let cmd = Command::new(self.init_path)
-                            .args(self.init_args[1..])
-                            .env("_LIBCONTAINER_INITPIPE", format!("{}",
-                                    cfd))
-                            .env("_LIBCONTAINER_STATEDIR", self.root)
-                            .current_dir(Path::new(self.config.rootfs))
-                            .stdin(p.stdin)
-                            .stdout(p.stdout)
-                            .stderr(p.stderr);
-
-            if p.console_socket.is_some() {
-                cmd.env("_LIBCONTAINER_CONSOLE", format!("{}",
-                        unsafe { p.console_socket.unwrap().as_raw_fd() }));
-            }
-
-            if !p.init {
-                return self.new_setns_process(p, cmd, pfd, cfd);
-            }
-
-            let fifo_file = format!("{}/{}", self.root, EXEC_FIFO_FILENAME);
-            let fifofd = fcntl::open(fifo_file,
-                    OFlag::O_PATH | OFlag::O_CLOEXEC,
-                    Mode::from_bits(0).unwrap())?;
-
-            cmd.env("_LIBCONTAINER_FIFOFD", format!("{}", fifofd));
-
-            self.new_init_process(p, cmd, pfd, cfd)
-        }
-
-        fn new_setns_process(&self, p: &Process, cmd: &mut Command, pfd: Rawfd, cfd: Rawfd) -> Result<SetnsProcess> {
-        }
-
-        fn new_init_process(&self, p: &Process, cmd: &mut Command, pfd: Rawfd, cfd: Rawfd) -> Result<InitProcess> {
-            cmd.env("_LINCONTAINER_INITTYPE", INITSTANDARD);
-        }
-    */
 }
 
 // Handle the differing rlimit types for different targets
