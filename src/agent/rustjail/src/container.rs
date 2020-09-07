@@ -20,8 +20,8 @@ use std::clone::Clone;
 use std::fmt::Display;
 use std::process::{Child, Command};
 
-// use crate::configs::namespaces::{NamespaceType};
-use crate::cgroups::Manager as CgroupManager;
+use cgroups::freezer::FreezerState;
+
 use crate::process::Process;
 // use crate::intelrdt::Manager as RdtManager;
 use crate::errors::*;
@@ -31,6 +31,7 @@ use crate::sync::*;
 // use crate::stats::Stats;
 use crate::capabilities::{self, CAPSMAP};
 use crate::cgroups::fs::{self as fscgroup, Manager as FsManager};
+use crate::cgroups::Manager;
 use crate::{mount, validator};
 
 use protocols::agent::StatsContainerResponse;
@@ -243,9 +244,7 @@ pub trait BaseContainer {
 // Or use Mutex<xx> as a member of struct, like C?
 // a lot of String in the struct might be &str
 #[derive(Debug)]
-pub struct LinuxContainer
-// where T: CgroupManager
-{
+pub struct LinuxContainer {
     pub id: String,
     pub root: String,
     pub config: Config,
@@ -305,7 +304,7 @@ impl Container for LinuxContainer {
             self.cgroup_manager
                 .as_ref()
                 .unwrap()
-                .freeze(fscgroup::FROZEN)?;
+                .freeze(FreezerState::Frozen)?;
 
             self.status.transition(Status::PAUSED);
             return Ok(());
@@ -327,7 +326,7 @@ impl Container for LinuxContainer {
             self.cgroup_manager
                 .as_ref()
                 .unwrap()
-                .freeze(fscgroup::THAWED)?;
+                .freeze(FreezerState::Thawed)?;
 
             self.status.transition(Status::RUNNING);
             return Ok(());
@@ -358,6 +357,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     lazy_static::initialize(&CAPSMAP);
 
     let init = std::env::var(INIT)?.eq(format!("{}", true).as_str());
+
     let no_pivot = std::env::var(NO_PIVOT)?.eq(format!("{}", true).as_str());
     let crfd = std::env::var(CRFD_FD)?.parse::<i32>().unwrap();
     let cfd_log = std::env::var(CLOG_FD)?.parse::<i32>().unwrap();
@@ -378,6 +378,8 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     let buf = read_sync(crfd)?;
     let cm_str = std::str::from_utf8(&buf)?;
+    log_child!(cfd_log, "get cgroup manager from parent: {:?}", &cm_str);
+
     let cm: FsManager = serde_json::from_str(cm_str)?;
 
     let p = if spec.process.is_some() {
@@ -511,6 +513,8 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     if to_new.contains(CloneFlags::CLONE_NEWNS) {
         // setup rootfs
+        log_child!(cfd_log, "cgroup manager paths for new container {:?}", &cm.paths);
+        log_child!(cfd_log, "cgroup manager mounts for new container {:?}", &cm.mounts);
         mount::init_rootfs(cfd_log, &spec, &cm.paths, &cm.mounts, bind_device)?;
     }
 
@@ -740,6 +744,7 @@ impl BaseContainer for LinuxContainer {
     }
 
     fn start(&mut self, mut p: Process) -> Result<()> {
+        info!(self.logger, "++++++++ container.start!");
         let logger = self.logger.new(o!("eid" => p.exec_id.clone()));
         let tty = p.tty;
         let fifo_file = format!("{}/{}", &self.root, EXEC_FIFO_FILENAME);
@@ -760,7 +765,7 @@ impl BaseContainer for LinuxContainer {
         }
         info!(logger, "exec fifo opened!");
 
-        fscgroup::init_static();
+        // fscgroup::init_static();
 
         if self.config.spec.is_none() {
             return Err(ErrorKind::ErrorCode("no spec".to_string()).into());
@@ -945,6 +950,7 @@ impl BaseContainer for LinuxContainer {
     }
 
     fn run(&mut self, p: Process) -> Result<()> {
+        info!(self.logger, "++++++++ container.run!");
         let init = p.init;
         self.start(p)?;
 
@@ -994,6 +1000,7 @@ impl BaseContainer for LinuxContainer {
     }
 
     fn exec(&mut self) -> Result<()> {
+        info!(self.logger, "++++++++ container.exec!");
         let fifo = format!("{}/{}", &self.root, EXEC_FIFO_FILENAME);
         let fd = fcntl::open(fifo.as_str(), OFlag::O_WRONLY, Mode::from_bits_truncate(0))?;
         let data: &[u8] = &[0];
@@ -1137,7 +1144,7 @@ fn join_namespaces(
     p: &Process,
     cm: &FsManager,
     st: &OCIState,
-    child: &mut Child,
+    _child: &mut Child,
     pwfd: RawFd,
     prfd: RawFd,
 ) -> Result<()> {
@@ -1338,6 +1345,7 @@ impl LinuxContainer {
         };
 
         let cgroup_manager = FsManager::new(cpath.as_str())?;
+        info!(logger, "new cgroup_manager {:?}", &cgroup_manager);
 
         Ok(LinuxContainer {
             id: id.clone(),
@@ -1361,48 +1369,6 @@ impl LinuxContainer {
     fn load<T: Into<String>>(_id: T, _base: T) -> Result<Self> {
         Err(ErrorKind::ErrorCode("not supported".to_string()).into())
     }
-    /*
-        fn new_parent_process(&self, p: &Process) -> Result<Box<ParentProcess>> {
-            let (pfd, cfd) = socket::socketpair(AddressFamily::Unix,
-                            SockType::Stream, SockProtocol::Tcp,
-                            SockFlag::SOCK_CLOEXEC)?;
-
-            let cmd = Command::new(self.init_path)
-                            .args(self.init_args[1..])
-                            .env("_LIBCONTAINER_INITPIPE", format!("{}",
-                                    cfd))
-                            .env("_LIBCONTAINER_STATEDIR", self.root)
-                            .current_dir(Path::new(self.config.rootfs))
-                            .stdin(p.stdin)
-                            .stdout(p.stdout)
-                            .stderr(p.stderr);
-
-            if p.console_socket.is_some() {
-                cmd.env("_LIBCONTAINER_CONSOLE", format!("{}",
-                        unsafe { p.console_socket.unwrap().as_raw_fd() }));
-            }
-
-            if !p.init {
-                return self.new_setns_process(p, cmd, pfd, cfd);
-            }
-
-            let fifo_file = format!("{}/{}", self.root, EXEC_FIFO_FILENAME);
-            let fifofd = fcntl::open(fifo_file,
-                    OFlag::O_PATH | OFlag::O_CLOEXEC,
-                    Mode::from_bits(0).unwrap())?;
-
-            cmd.env("_LIBCONTAINER_FIFOFD", format!("{}", fifofd));
-
-            self.new_init_process(p, cmd, pfd, cfd)
-        }
-
-        fn new_setns_process(&self, p: &Process, cmd: &mut Command, pfd: Rawfd, cfd: Rawfd) -> Result<SetnsProcess> {
-        }
-
-        fn new_init_process(&self, p: &Process, cmd: &mut Command, pfd: Rawfd, cfd: Rawfd) -> Result<InitProcess> {
-            cmd.env("_LINCONTAINER_INITTYPE", INITSTANDARD);
-        }
-    */
 }
 
 // Handle the differing rlimit types for different targets
