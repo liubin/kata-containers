@@ -175,7 +175,7 @@ impl agentService {
     }
 
     fn do_start_container(&self, req: protocols::agent::StartContainerRequest) -> Result<()> {
-        let cid = req.container_id.clone();
+        let cid = req.container_id;
 
         let sandbox = self.sandbox.clone();
         let mut s = sandbox.lock().unwrap();
@@ -280,7 +280,7 @@ impl agentService {
         let cid = req.container_id.clone();
         let exec_id = req.exec_id.clone();
 
-        info!(sl!(), "cid: {} eid: {}", cid.clone(), exec_id.clone());
+        info!(sl!(), "cid: {} eid: {}", cid, exec_id);
 
         let s = self.sandbox.clone();
         let mut sandbox = s.lock().unwrap();
@@ -343,7 +343,7 @@ impl agentService {
         req: protocols::agent::WaitProcessRequest,
     ) -> Result<protocols::agent::WaitProcessResponse> {
         let cid = req.container_id.clone();
-        let eid = req.exec_id.clone();
+        let eid = req.exec_id;
         let s = self.sandbox.clone();
         let mut resp = WaitProcessResponse::new();
         let pid: pid_t;
@@ -607,7 +607,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
     ) -> ttrpc::Result<ListProcessesResponse> {
         let cid = req.container_id.clone();
         let format = req.format.clone();
-        let mut args = req.args.clone().into_vec();
+        let mut args = req.args.into_vec();
         let mut resp = ListProcessesResponse::new();
 
         let s = Arc::clone(&self.sandbox);
@@ -726,7 +726,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::StatsContainerRequest,
     ) -> ttrpc::Result<StatsContainerResponse> {
-        let cid = req.container_id.clone();
+        let cid = req.container_id;
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
 
@@ -840,7 +840,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         req: protocols::agent::CloseStdinRequest,
     ) -> ttrpc::Result<Empty> {
         let cid = req.container_id.clone();
-        let eid = req.exec_id.clone();
+        let eid = req.exec_id;
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
 
@@ -919,7 +919,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::UpdateInterfaceRequest,
     ) -> ttrpc::Result<Interface> {
-        let interface = req.interface.clone();
+        let interface = req.interface;
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
 
@@ -947,7 +947,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         req: protocols::agent::UpdateRoutesRequest,
     ) -> ttrpc::Result<Routes> {
         let mut routes = protocols::agent::Routes::new();
-        let rs = req.routes.clone().unwrap().Routes.into_vec();
+        let rs = req.routes.unwrap().Routes.into_vec();
 
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
@@ -1142,7 +1142,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::AddARPNeighborsRequest,
     ) -> ttrpc::Result<Empty> {
-        let neighs = req.neighbors.clone().unwrap().ARPNeighbors.into_vec();
+        let neighs = req.neighbors.unwrap().ARPNeighbors.into_vec();
 
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
@@ -1681,8 +1681,8 @@ fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
     let spec_root = spec.root.as_ref().unwrap();
 
     let bundle_path = Path::new(CONTAINER_BASE).join(cid);
-    let config_path = bundle_path.clone().join("config.json");
-    let rootfs_path = bundle_path.clone().join("rootfs");
+    let config_path = bundle_path.join("config.json");
+    let rootfs_path = bundle_path.join("rootfs");
 
     fs::create_dir_all(&rootfs_path)?;
     BareMount::new(

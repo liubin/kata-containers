@@ -85,7 +85,7 @@ pub fn get_metrics(_: &protocols::agent::GetMetricsRequest) -> Result<String> {
     let encoder = TextEncoder::new();
     encoder.encode(&metric_families, &mut buffer).unwrap();
 
-    Ok(String::from_utf8(buffer.clone()).unwrap())
+    Ok(String::from_utf8(buffer).unwrap())
 }
 
 fn update_agent_metrics() {

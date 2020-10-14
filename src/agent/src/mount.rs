@@ -243,8 +243,7 @@ fn ephemeral_storage_handler(
     storage: &Storage,
     sandbox: Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
-    let s = sandbox.clone();
-    let mut sb = s.lock().unwrap();
+    let mut sb = sandbox.lock().unwrap();
     let new_storage = sb.set_sandbox_storage(&storage.mount_point);
 
     if !new_storage {
@@ -265,8 +264,7 @@ fn local_storage_handler(
     storage: &Storage,
     sandbox: Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
-    let s = sandbox.clone();
-    let mut sb = s.lock().unwrap();
+    let mut sb = sandbox.lock().unwrap();
     let new_storage = sb.set_sandbox_storage(&storage.mount_point);
 
     if !new_storage {
@@ -453,7 +451,7 @@ pub fn add_storages(
             None => {
                 return Err(anyhow!(
                     "Failed to find the storage handler {}",
-                    storage.driver.to_owned()
+                    storage.driver
                 ));
             }
             Some(f) => f,

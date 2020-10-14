@@ -247,7 +247,7 @@ fn start_sandbox(logger: &Logger, config: &agentConfig, init_mode: bool) -> Resu
     sandbox.lock().unwrap().sender = Some(tx);
 
     //vsock:///dev/vsock, port
-    let mut server = rpc::start(sandbox.clone(), config.server_addr.as_str());
+    let mut server = rpc::start(sandbox, config.server_addr.as_str());
 
     let _ = server.start().unwrap();
 
@@ -271,8 +271,6 @@ fn setup_signal_handler(logger: &Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result
         .map_err(|err| anyhow!(err).context("failed to setup agent as a child subreaper"))?;
 
     let signals = Signals::new(&[SIGCHLD])?;
-
-    let s = sandbox.clone();
 
     thread::spawn(move || {
         'outer: for sig in signals.forever() {
@@ -309,7 +307,7 @@ fn setup_signal_handler(logger: &Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result
 
                     let logger = logger.new(o!("child-pid" => child_pid));
 
-                    let mut sandbox = s.lock().unwrap();
+                    let mut sandbox = sandbox.lock().unwrap();
                     let process = sandbox.find_process(raw_pid);
                     if process.is_none() {
                         info!(logger, "child exited unexpectedly");
