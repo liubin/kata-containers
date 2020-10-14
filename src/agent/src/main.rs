@@ -364,7 +364,8 @@ fn init_agent_as_init(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result
 
     env::set_var("PATH", "/bin:/sbin/:/usr/bin/:/usr/sbin/");
 
-    let contents = std::fs::read_to_string("/etc/hostname").unwrap_or(String::from("localhost"));
+    let contents =
+        std::fs::read_to_string("/etc/hostname").unwrap_or_else(|_| String::from("localhost"));
     let contents_array: Vec<&str> = contents.split(' ').collect();
     let hostname = contents_array[0].trim();
 
