@@ -35,8 +35,10 @@ install:
   - export RUST_AGENT=yes
   - rustup target add x86_64-unknown-linux-musl
   - sudo ln -sf /usr/bin/g++ /bin/musl-g++
+  - rustup component add clippy
   - rustup component add rustfmt
   - make -C ${TRAVIS_BUILD_DIR}/src/agent
+  - cargo clippy --release -- -D warnings
   - make -C ${TRAVIS_BUILD_DIR}/src/agent check
   - sudo -E PATH=$PATH make -C ${TRAVIS_BUILD_DIR}/src/agent check
 
