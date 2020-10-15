@@ -571,10 +571,10 @@ pub fn get_cgroup_mounts(
     'outer: for (_, line) in reader.lines().enumerate() {
         let line = line?;
 
-        let fields: Vec<&str> = line.split("\t").collect();
+        let fields: Vec<&str> = line.split('\t').collect();
 
         // Ignore comment header
-        if fields[0].starts_with("#") {
+        if fields[0].starts_with('#') {
             continue;
         }
 
@@ -677,7 +677,7 @@ fn ensure_destination_exists(destination: &str, fs_type: &str) -> Result<()> {
 fn parse_options(option_list: Vec<String>) -> HashMap<String, String> {
     let mut options = HashMap::new();
     for opt in option_list.iter() {
-        let fields: Vec<&str> = opt.split("=").collect();
+        let fields: Vec<&str> = opt.split('=').collect();
         if fields.len() != 2 {
             continue;
         }

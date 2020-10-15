@@ -144,7 +144,7 @@ impl agentConfig {
 }
 
 fn get_vsock_port(p: &str) -> Result<i32> {
-    let fields: Vec<&str> = p.split("=").collect();
+    let fields: Vec<&str> = p.split('=').collect();
     if fields.len() != 2 {
         return Err(anyhow!("invalid port parameter"));
     }
@@ -180,7 +180,7 @@ fn logrus_to_slog_level(logrus_level: &str) -> Result<slog::Level> {
 }
 
 fn get_log_level(param: &str) -> Result<slog::Level> {
-    let fields: Vec<&str> = param.split("=").collect();
+    let fields: Vec<&str> = param.split('=').collect();
 
     if fields.len() != 2 {
         return Err(anyhow!("invalid log level parameter"));
@@ -194,7 +194,7 @@ fn get_log_level(param: &str) -> Result<slog::Level> {
 }
 
 fn get_hotplug_timeout(param: &str) -> Result<time::Duration> {
-    let fields: Vec<&str> = param.split("=").collect();
+    let fields: Vec<&str> = param.split('=').collect();
 
     if fields.len() != 2 {
         return Err(anyhow!("invalid hotplug timeout parameter"));
@@ -214,7 +214,7 @@ fn get_hotplug_timeout(param: &str) -> Result<time::Duration> {
 }
 
 fn get_bool_value(param: &str) -> Result<bool> {
-    let fields: Vec<&str> = param.split("=").collect();
+    let fields: Vec<&str> = param.split('=').collect();
 
     if fields.len() != 2 {
         return Ok(false);
@@ -236,7 +236,7 @@ fn get_bool_value(param: &str) -> Result<bool> {
 }
 
 fn get_container_pipe_size(param: &str) -> Result<i32> {
-    let fields: Vec<&str> = param.split("=").collect();
+    let fields: Vec<&str> = param.split('=').collect();
 
     if fields.len() != 2 {
         return Err(anyhow!("invalid container pipe size parameter"));

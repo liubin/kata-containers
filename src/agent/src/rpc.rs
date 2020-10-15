@@ -1568,7 +1568,7 @@ fn is_signal_handled(pid: pid_t, signum: u32) -> bool {
             }
         };
         if line.starts_with("SigCgt:") {
-            let mask_vec: Vec<&str> = line.split(":").collect();
+            let mask_vec: Vec<&str> = line.split(':').collect();
             if mask_vec.len() != 2 {
                 warn!(sl!(), "parse the SigCgt field failed\n");
                 return false;
