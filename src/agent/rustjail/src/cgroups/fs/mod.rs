@@ -259,7 +259,7 @@ fn set_network_resources(
 
 fn set_devices_resources(
     _cg: &cgroups::Cgroup,
-    device_resources: &Vec<LinuxDeviceCgroup>,
+    device_resources: &[LinuxDeviceCgroup],
     res: &mut cgroups::Resources,
 ) -> Result<()> {
     info!(sl!(), "cgroup manager set devices");
@@ -288,7 +288,7 @@ fn set_devices_resources(
 
 fn set_hugepages_resources(
     _cg: &cgroups::Cgroup,
-    hugepage_limits: &Vec<LinuxHugepageLimit>,
+    hugepage_limits: &[LinuxHugepageLimit],
     res: &mut cgroups::Resources,
 ) -> Result<()> {
     info!(sl!(), "cgroup manager set hugepage");
@@ -450,7 +450,7 @@ fn set_pids_resources(cg: &cgroups::Cgroup, pids: &LinuxPids) -> Result<()> {
 }
 
 fn build_blk_io_device_throttle_resource(
-    input: &Vec<oci::LinuxThrottleDevice>,
+    input: &[oci::LinuxThrottleDevice],
 ) -> Vec<BlkIoDeviceThrottleResource> {
     let mut blk_io_device_throttle_resources = vec![];
     for d in input.iter() {
@@ -779,7 +779,7 @@ https://github.com/opencontainers/runc/blob/a5847db387ae28c0ca4ebe4beee1a76900c8
     Total 0
 */
 
-fn get_blkio_stat_blkiodata(blkiodata: &Vec<BlkIoData>) -> RepeatedField<BlkioStatsEntry> {
+fn get_blkio_stat_blkiodata(blkiodata: &[BlkIoData]) -> RepeatedField<BlkioStatsEntry> {
     let mut m = RepeatedField::new();
     if blkiodata.len() == 0 {
         return m;
@@ -801,7 +801,7 @@ fn get_blkio_stat_blkiodata(blkiodata: &Vec<BlkIoData>) -> RepeatedField<BlkioSt
     m
 }
 
-fn get_blkio_stat_ioservice(services: &Vec<IoService>) -> RepeatedField<BlkioStatsEntry> {
+fn get_blkio_stat_ioservice(services: &[IoService]) -> RepeatedField<BlkioStatsEntry> {
     let mut m = RepeatedField::new();
 
     if services.len() == 0 {

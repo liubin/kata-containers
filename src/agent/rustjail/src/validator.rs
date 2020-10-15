@@ -11,7 +11,7 @@ use oci::{LinuxIDMapping, LinuxNamespace, Spec};
 use std::collections::HashMap;
 use std::path::{Component, PathBuf};
 
-fn contain_namespace(nses: &Vec<LinuxNamespace>, key: &str) -> bool {
+fn contain_namespace(nses: &[LinuxNamespace], key: &str) -> bool {
     for ns in nses {
         if ns.r#type.as_str() == key {
             return true;
@@ -21,7 +21,7 @@ fn contain_namespace(nses: &Vec<LinuxNamespace>, key: &str) -> bool {
     false
 }
 
-fn get_namespace_path(nses: &Vec<LinuxNamespace>, key: &str) -> Result<String> {
+fn get_namespace_path(nses: &[LinuxNamespace], key: &str) -> Result<String> {
     for ns in nses {
         if ns.r#type.as_str() == key {
             return Ok(ns.path.clone());
@@ -104,7 +104,7 @@ fn security(oci: &Spec) -> Result<()> {
     Ok(())
 }
 
-fn idmapping(maps: &Vec<LinuxIDMapping>) -> Result<()> {
+fn idmapping(maps: &[LinuxIDMapping]) -> Result<()> {
     for map in maps {
         if map.size > 0 {
             return Ok(());
@@ -232,7 +232,7 @@ fn rootless_euid_mapping(oci: &Spec) -> Result<()> {
     Ok(())
 }
 
-fn has_idmapping(maps: &Vec<LinuxIDMapping>, id: u32) -> bool {
+fn has_idmapping(maps: &[LinuxIDMapping], id: u32) -> bool {
     for map in maps {
         if id >= map.container_id && id < map.container_id + map.size {
             return true;

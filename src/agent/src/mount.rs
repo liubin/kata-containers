@@ -644,7 +644,7 @@ pub fn cgroups_mount(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result<
     Ok(())
 }
 
-pub fn remove_mounts(mounts: &Vec<String>) -> Result<()> {
+pub fn remove_mounts(mounts: &[String]) -> Result<()> {
     for m in mounts.iter() {
         mount::umount(m.as_str()).context(format!("failed to umount {:?}", m))?;
     }

@@ -1590,7 +1590,7 @@ fn is_signal_handled(pid: pid_t, signum: u32) -> bool {
     false
 }
 
-fn do_mem_hotplug_by_probe(addrs: &Vec<u64>) -> Result<()> {
+fn do_mem_hotplug_by_probe(addrs: &[u64]) -> Result<()> {
     for addr in addrs.iter() {
         fs::write(SYSFS_MEMORY_HOTPLUG_PROBE_PATH, format!("{:#X}", *addr))?;
     }
