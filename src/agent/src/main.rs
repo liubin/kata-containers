@@ -480,8 +480,8 @@ where
 
     // write and return
     match writer.write_all(&buf[..buf_len]) {
-        Ok(_) => return Ok(buf_len as u64),
-        Err(err) => return Err(err),
+        Ok(_) => Ok(buf_len as u64),
+        Err(err) => Err(err),
     }
 }
 

@@ -1296,17 +1296,15 @@ impl protocols::agent_ttrpc::AgentService for agentService {
         drop(sandbox);
 
         match event_rx.recv() {
-            Err(err) => {
-                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
-                    ttrpc::Code::INTERNAL,
-                    err.to_string(),
-                )))
-            }
+            Err(err) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INTERNAL,
+                err.to_string(),
+            ))),
             Ok(container_id) => {
                 info!(sl!(), "get_oom_event return {}", &container_id);
                 let mut resp = OOMEvent::new();
                 resp.container_id = container_id;
-                return Ok(resp);
+                Ok(resp)
             }
         }
     }
@@ -1744,9 +1742,9 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
                 "load_kernel_module return code: {} stdout:{} stderr:{}",
                 code, std_out, std_err
             );
-            return Err(anyhow!(msg));
+            Err(anyhow!(msg))
         }
-        None => return Err(anyhow!("Process terminated by signal")),
+        None => Err(anyhow!("Process terminated by signal")),
     }
 }
 

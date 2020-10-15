@@ -112,14 +112,14 @@ impl Sandbox {
     // acquiring a lock on sandbox.
     pub fn unset_sandbox_storage(&mut self, path: &str) -> Result<bool> {
         match self.storages.get_mut(path) {
-            None => return Err(anyhow!("Sandbox storage with path {} not found", path)),
+            None => Err(anyhow!("Sandbox storage with path {} not found", path)),
             Some(count) => {
                 *count -= 1;
                 if *count < 1 {
                     self.storages.remove(path);
                     return Ok(true);
                 }
-                return Ok(false);
+                Ok(false)
             }
         }
     }
