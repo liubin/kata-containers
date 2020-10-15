@@ -166,7 +166,7 @@ impl Sandbox {
 
     pub fn setup_shared_namespaces(&mut self) -> Result<bool> {
         // Set up shared IPC namespace
-        self.shared_ipcns = match Namespace::new(&self.logger).as_ipc().setup() {
+        self.shared_ipcns = match Namespace::new(&self.logger).get_ipc().setup() {
             Ok(ns) => ns,
             Err(err) => {
                 return Err(anyhow!(err).context("Failed to setup persistent IPC namespace"));
@@ -175,7 +175,7 @@ impl Sandbox {
 
         // // Set up shared UTS namespace
         self.shared_utsns = match Namespace::new(&self.logger)
-            .as_uts(self.hostname.as_str())
+            .get_uts(self.hostname.as_str())
             .setup()
         {
             Ok(ns) => ns,
@@ -204,7 +204,7 @@ impl Sandbox {
                 ));
             }
 
-            let mut pid_ns = Namespace::new(&self.logger).as_pid();
+            let mut pid_ns = Namespace::new(&self.logger).get_pid();
             pid_ns.path = format!("/proc/{}/ns/pid", init_pid);
 
             self.sandbox_pidns = Some(pid_ns);

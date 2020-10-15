@@ -16,7 +16,7 @@ use std::thread;
 use crate::mount::{BareMount, FLAGS};
 use slog::Logger;
 
-//use container::Process;
+// use container::Process;
 const PERSISTENT_NS_DIR: &str = "/var/run/sandbox-ns";
 pub const NSTYPEIPC: &str = "ipc";
 pub const NSTYPEUTS: &str = "uts";
@@ -37,7 +37,7 @@ pub struct Namespace {
     pub path: String,
     persistent_ns_dir: String,
     ns_type: NamespaceType,
-    //only used for uts namespace
+    // only used for uts namespace
     pub hostname: Option<String>,
 }
 
@@ -52,12 +52,12 @@ impl Namespace {
         }
     }
 
-    pub fn as_ipc(mut self) -> Self {
+    pub fn get_ipc(mut self) -> Self {
         self.ns_type = NamespaceType::IPC;
         self
     }
 
-    pub fn as_uts(mut self, hostname: &str) -> Self {
+    pub fn get_uts(mut self, hostname: &str) -> Self {
         self.ns_type = NamespaceType::UTS;
         if hostname != "" {
             self.hostname = Some(String::from(hostname));
@@ -65,7 +65,7 @@ impl Namespace {
         self
     }
 
-    pub fn as_pid(mut self) -> Self {
+    pub fn get_pid(mut self) -> Self {
         self.ns_type = NamespaceType::PID;
         self
     }
@@ -207,7 +207,7 @@ mod tests {
         let tmpdir = Builder::new().prefix("ipc").tempdir().unwrap();
 
         let ns_ipc = Namespace::new(&logger)
-            .as_ipc()
+            .get_ipc()
             .set_root_dir(tmpdir.path().to_str().unwrap())
             .setup();
 
@@ -218,7 +218,7 @@ mod tests {
         let tmpdir = Builder::new().prefix("ipc").tempdir().unwrap();
 
         let ns_uts = Namespace::new(&logger)
-            .as_uts("test_hostname")
+            .get_uts("test_hostname")
             .set_root_dir(tmpdir.path().to_str().unwrap())
             .setup();
 
