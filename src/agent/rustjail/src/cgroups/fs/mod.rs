@@ -48,11 +48,11 @@ macro_rules! sl {
 pub fn load_or_create<'a>(h: Box<&'a dyn cgroups::Hierarchy>, path: &str) -> Cgroup<'a> {
     let valid_path = path.trim_start_matches("/").to_string();
     let cg = load(h.clone(), &valid_path);
-    if cg.is_none() {
+    if let Some(cg) = cg {
+        cg
+    } else {
         info!(sl!(), "create new cgroup: {}", &valid_path);
         cgroups::Cgroup::new(h, valid_path.as_str())
-    } else {
-        cg.unwrap()
     }
 }
 
@@ -210,8 +210,8 @@ impl CgroupManager for Manager {
         let h = cgroups::hierarchies::auto();
         let h = Box::new(&*h);
         let cg = load(h, &self.cpath);
-        if cg.is_some() {
-            cg.unwrap().delete();
+        if let Some(cg) = cg {
+            cg.delete();
         }
         Ok(())
     }
@@ -730,13 +730,13 @@ fn get_pids_stats(cg: &cgroups::Cgroup) -> SingularPtrField<PidsStats> {
     let current = pid_controller.get_pid_current().unwrap_or(0);
     let max = pid_controller.get_pid_max();
 
-    let limit = if max.is_err() {
-        0
-    } else {
-        match max.unwrap() {
+    let limit = if let Ok(max) = max {
+        match max {
             MaxValue::Value(v) => v,
             MaxValue::Max => 0,
         }
+    } else {
+        0
     } as u64;
 
     SingularPtrField::some(PidsStats {
