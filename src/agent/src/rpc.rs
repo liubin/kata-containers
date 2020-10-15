@@ -6,7 +6,6 @@
 use std::path::Path;
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
-use ttrpc;
 
 use anyhow::{anyhow, Context, Result};
 use oci::{LinuxNamespace, Root, Spec};
@@ -21,7 +20,6 @@ use protocols::health::{
     HealthCheckResponse, HealthCheckResponse_ServingStatus, VersionCheckResponse,
 };
 use protocols::types::Interface;
-use rustjail;
 use rustjail::cgroups::notifier;
 use rustjail::container::{BaseContainer, Container, LinuxContainer};
 use rustjail::process::Process;
@@ -47,7 +45,6 @@ use crate::AGENT_CONFIG;
 use netlink::{RtnlHandle, NETLINK_ROUTE};
 
 use libc::{self, c_ushort, pid_t, winsize, TIOCSWINSZ};
-use serde_json;
 use std::convert::TryFrom;
 use std::fs;
 use std::os::unix::io::RawFd;
@@ -152,14 +149,13 @@ impl agentService {
 
         let pipe_size = AGENT_CONFIG.read().unwrap().container_pipe_size;
         let p = if oci.process.is_some() {
-            let tp = Process::new(
+            Process::new(
                 &sl!(),
                 &oci.process.as_ref().unwrap(),
                 cid.as_str(),
                 true,
                 pipe_size,
-            )?;
-            tp
+            )?
         } else {
             info!(sl!(), "no process configurations!");
             return Err(anyhow!(nix::Error::from_errno(nix::errno::Errno::EINVAL)));
@@ -249,18 +245,20 @@ impl agentService {
             let _ctr = sandbox
                 .get_container(&cid2)
                 .ok_or_else(|| anyhow!("Invalid container id"))
-                .and_then(|ctr| {
+                .map(|ctr| {
                     ctr.destroy().unwrap();
                     tx.send(1).unwrap();
-                    Ok(ctr)
                 });
         });
 
-        if let Err(_) = rx.recv_timeout(Duration::from_secs(req.timeout as u64)) {
+        if rx
+            .recv_timeout(Duration::from_secs(req.timeout as u64))
+            .is_err()
+        {
             return Err(anyhow!(nix::Error::from_errno(nix::errno::Errno::ETIME)));
         }
 
-        if let Err(_) = handle.join() {
+        if handle.join().is_err() {
             return Err(anyhow!(nix::Error::from_errno(
                 nix::errno::Errno::UnknownErrno
             )));
@@ -1101,7 +1099,7 @@ impl protocols::agent_ttrpc::AgentService for agentService {
             Ok(_) => {
                 let sandbox = self.sandbox.clone();
                 let mut s = sandbox.lock().unwrap();
-                let _ = req
+                let _dns = req
                     .dns
                     .to_vec()
                     .iter()
@@ -1601,8 +1599,12 @@ fn do_set_guest_date_time(sec: i64, usec: i64) -> Result<()> {
         tv_usec: usec,
     };
 
-    let ret =
-        unsafe { libc::settimeofday(&tv as *const libc::timeval, 0 as *const libc::timezone) };
+    let ret = unsafe {
+        libc::settimeofday(
+            &tv as *const libc::timeval,
+            std::ptr::null::<libc::timezone>(),
+        )
+    };
 
     Errno::result(ret).map(drop)?;
 

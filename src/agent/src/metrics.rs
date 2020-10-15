@@ -8,7 +8,6 @@ extern crate procfs;
 use prometheus::{Encoder, Gauge, GaugeVec, IntCounter, TextEncoder};
 
 use anyhow::Result;
-use protocols;
 
 const NAMESPACE_KATA_AGENT: &str = "kata_agent";
 const NAMESPACE_KATA_GUEST: &str = "kata_guest";
@@ -90,12 +89,9 @@ pub fn get_metrics(_: &protocols::agent::GetMetricsRequest) -> Result<String> {
 
 fn update_agent_metrics() {
     let me = procfs::process::Process::myself();
-    match me {
-        Err(err) => {
-            error!(sl!(), "failed to create process instance: {:?}", err);
-            return;
-        }
-        Ok(_) => {}
+    if let Err(err) = me {
+        error!(sl!(), "failed to create process instance: {:?}", err);
+        return;
     }
 
     let me = me.unwrap();

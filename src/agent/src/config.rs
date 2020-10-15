@@ -225,12 +225,12 @@ fn get_bool_value(param: &str) -> Result<bool> {
     // first try to parse as bool value
     v.parse::<bool>().or_else(|_err1| {
         // then try to parse as integer value
-        v.parse::<u64>().or_else(|_err2| Ok(0)).and_then(|v| {
+        v.parse::<u64>().or_else(|_err2| Ok(0)).map(|v| {
             // only `0` returns false, otherwise returns true
-            Ok(match v {
+            match v {
                 0 => false,
                 _ => true,
-            })
+            }
         })
     })
 }

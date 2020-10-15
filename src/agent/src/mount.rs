@@ -39,7 +39,7 @@ pub const DRIVERLOCALTYPE: &str = "local";
 
 pub const TYPEROOTFS: &str = "rootfs";
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 lazy_static! {
     pub static ref FLAGS: HashMap<&'static str, (bool, MsFlags)> = {
         let mut m = HashMap::new();
@@ -88,7 +88,7 @@ pub struct INIT_MOUNT {
     options: Vec<&'static str>,
 }
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 lazy_static!{
     static ref CGROUPS: HashMap<&'static str, &'static str> = {
         let mut m = HashMap::new();
@@ -109,7 +109,7 @@ lazy_static!{
     };
 }
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 lazy_static! {
     pub static ref INIT_ROOTFS_MOUNTS: Vec<INIT_MOUNT> = vec![
         INIT_MOUNT{fstype: "proc", src: "proc", dest: "/proc", options: vec!["nosuid", "nodev", "noexec"]},
@@ -126,7 +126,7 @@ lazy_static! {
 type StorageHandler = fn(&Logger, &Storage, Arc<Mutex<Sandbox>>) -> Result<String>;
 
 // STORAGEHANDLERLIST lists the supported drivers.
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 lazy_static! {
     pub static ref STORAGEHANDLERLIST: HashMap<&'static str, StorageHandler> = {
     	let mut m = HashMap::new();
@@ -173,9 +173,9 @@ impl<'a> BareMount<'a> {
         BareMount {
             source: s,
             destination: d,
-            fs_type: fs_type,
-            flags: flags,
-            options: options,
+            fs_type,
+            flags,
+            options,
             logger: logger.new(o!("subsystem" => "baremount")),
         }
     }
@@ -414,13 +414,13 @@ fn parse_mount_flags_and_options(options_vec: Vec<&str>) -> (MsFlags, String) {
             match FLAGS.get(opt) {
                 Some(x) => {
                     let (_, f) = *x;
-                    flags = flags | f;
+                    flags |= f;
                 }
                 None => {
                     if !options.is_empty() {
                         options.push_str(format!(",{}", opt).as_str());
                     } else {
-                        options.push_str(format!("{}", opt).as_str());
+                        options.push_str(opt.to_string().as_str());
                     }
                 }
             };
@@ -481,7 +481,7 @@ fn mount_to_rootfs(logger: &Logger, m: &INIT_MOUNT) -> Result<()> {
 
     if let Err(err) = bare_mount.mount() {
         if m.src != "dev" {
-            return Err(err.into());
+            return Err(err);
         }
         error!(
             logger,

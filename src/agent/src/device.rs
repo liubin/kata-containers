@@ -32,7 +32,7 @@ const VM_ROOTFS: &str = "/";
 type DeviceHandler = fn(&Device, &mut Spec, &Arc<Mutex<Sandbox>>) -> Result<()>;
 
 // DeviceHandlerList lists the supported drivers.
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 lazy_static! {
     static ref DEVICEHANDLERLIST: HashMap<&'static str, DeviceHandler> = {
         let mut m: HashMap<&'static str, DeviceHandler> = HashMap::new();

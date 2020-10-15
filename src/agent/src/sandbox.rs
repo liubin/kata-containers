@@ -75,7 +75,7 @@ impl Sandbox {
             sender: None,
             rtnl: Some(RtnlHandle::new(NETLINK_ROUTE, 0).unwrap()),
             hooks: None,
-            event_rx: event_rx,
+            event_rx,
             event_tx: tx,
         })
     }
@@ -228,7 +228,7 @@ impl Sandbox {
     }
 
     pub fn destroy(&mut self) -> Result<()> {
-        for (_, ctr) in &mut self.containers {
+        for ctr in self.containers.values_mut() {
             ctr.destroy()?;
         }
         Ok(())
@@ -316,9 +316,8 @@ impl Sandbox {
         thread::spawn(move || {
             for event in rx {
                 info!(logger, "got an OOM event {:?}", event);
-                match tx.send(container_id.clone()) {
-                    Err(err) => error!(logger, "failed to send message: {:?}", err),
-                    Ok(_) => {}
+                if let Err(err) = tx.send(container_id.clone()) {
+                    error!(logger, "failed to send message: {:?}", err)
                 }
             }
         });
