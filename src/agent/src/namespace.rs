@@ -110,12 +110,15 @@ impl Namespace {
                 return Err(err.to_string());
             }
 
-            if ns_type == NamespaceType::UTS && hostname.is_some() {
-                match nix::unistd::sethostname(hostname.unwrap()) {
-                    Err(err) => return Err(err.to_string()),
-                    Ok(_) => (),
+            if ns_type == NamespaceType::UTS {
+                if let Some(hostname) = hostname {
+                    match nix::unistd::sethostname(hostname) {
+                        Err(err) => return Err(err.to_string()),
+                        Ok(_) => (),
+                    }
                 }
             }
+
             // Bind mount the new namespace from the current thread onto the mount point to persist it.
             let source: &str = origin_ns_path.as_str();
             let destination: &str = new_ns_path.as_path().to_str().unwrap_or("none");

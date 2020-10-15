@@ -206,9 +206,7 @@ impl agentService {
         let mut remove_container_resources = |sandbox: &mut Sandbox| -> Result<()> {
             // Find the sandbox storage used by this container
             let mounts = sandbox.container_mounts.get(&cid);
-            if mounts.is_some() {
-                let mounts = mounts.unwrap();
-
+            if let Some(mounts) = mounts {
                 remove_mounts(&mounts)?;
 
                 for m in mounts.iter() {
@@ -1622,8 +1620,8 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
 
     let parent = path.parent();
 
-    let dir = if parent.is_some() {
-        parent.unwrap().to_path_buf()
+    let dir = if let Some(parent) = parent {
+        parent.to_path_buf()
     } else {
         PathBuf::from("/")
     };

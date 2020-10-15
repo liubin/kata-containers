@@ -280,8 +280,7 @@ fn local_storage_handler(
 
     let opts = parse_options(opts_vec);
     let mode = opts.get("mode");
-    if mode.is_some() {
-        let mode = mode.unwrap();
+    if let Some(mode) = mode {
         let mut permission = fs::metadata(&storage.mount_point)?.permissions();
 
         let o_mode = u32::from_str_radix(mode, 8)?;

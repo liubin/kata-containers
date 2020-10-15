@@ -301,8 +301,8 @@ fn setup_signal_handler(logger: &Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result
                 };
 
                 let pid = wait_status.pid();
-                if pid.is_some() {
-                    let raw_pid = pid.unwrap().as_raw();
+                if let Some(pid) = pid {
+                    let raw_pid = pid.as_raw();
                     let child_pid = format!("{}", raw_pid);
 
                     let logger = logger.new(o!("child-pid" => child_pid));
