@@ -268,7 +268,7 @@ func (q *QMP) readLoop(fromVMCh chan<- []byte) {
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		if q.cfg.Logger.V(1) {
-			q.cfg.Logger.Infof("%s", string(line))
+			q.cfg.Logger.Infof("read from QMP: %s", string(line))
 		}
 
 		// Since []byte channel type transfer slice info(include slice underlying array pointer, len, cap)
@@ -1638,4 +1638,14 @@ func (q *QMP) ExecQomSet(ctx context.Context, path, property string, value uint6
 	}
 
 	return q.executeCommand(ctx, "qom-set", args, nil)
+}
+
+func (q *QMP) ExecuteDumpGuestMemory(ctx context.Context, protocol string, paging bool, format string) error {
+	args := map[string]interface{}{
+		"protocol": protocol,
+		"paging":   paging,
+		"format":   format,
+	}
+
+	return q.executeCommand(ctx, "dump-guest-memory", args, nil)
 }

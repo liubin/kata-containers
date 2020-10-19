@@ -133,6 +133,9 @@ type qemuArch interface {
 
 	// append vIOMMU device
 	appendIOMMU(devices []govmmQemu.Device) ([]govmmQemu.Device, error)
+
+	// append pvpanic device
+	appendPVPanicDevicc(devices []govmmQemu.Device) ([]govmmQemu.Device, error)
 }
 
 type qemuArchBase struct {
@@ -787,4 +790,10 @@ func (q *qemuArchBase) appendIOMMU(devices []govmmQemu.Device) ([]govmmQemu.Devi
 	default:
 		return devices, fmt.Errorf("Machine Type %s does not support vIOMMU", q.qemuMachine.Type)
 	}
+}
+
+// appendPVPanicDevicc appends a pvpanic device
+func (q *qemuArchBase) appendPVPanicDevicc(devices []govmmQemu.Device) ([]govmmQemu.Device, error) {
+	devices = append(devices, govmmQemu.PVPanicDevice{NoShutdown: true})
+	return devices, nil
 }

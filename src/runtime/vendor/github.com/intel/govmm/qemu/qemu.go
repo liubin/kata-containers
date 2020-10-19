@@ -976,6 +976,24 @@ func (dev SerialDevice) deviceName(config *Config) string {
 	return string(dev.Driver)
 }
 
+// PVPanicDevice represents a qemu pvpanic device.
+type PVPanicDevice struct {
+	NoShutdown bool
+}
+
+// Valid always returns true for pvpanic device
+func (dev PVPanicDevice) Valid() bool {
+	return true
+}
+
+// QemuParams returns the qemu parameters built out of this serial device.
+func (dev PVPanicDevice) QemuParams(config *Config) []string {
+	if dev.NoShutdown {
+		return []string{"-device", "pvpanic", "-no-shutdown"}
+	}
+	return []string{"-device", "pvpanic"}
+}
+
 // BlockDeviceInterface defines the type of interface the device is connected to.
 type BlockDeviceInterface string
 

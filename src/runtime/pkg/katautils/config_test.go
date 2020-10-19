@@ -1601,3 +1601,38 @@ func TestCheckFactoryConfig(t *testing.T) {
 		}
 	}
 }
+
+func TestGetGuestMemoryDumpFormat(t *testing.T) {
+	testCases := []struct {
+		input  string
+		except string
+	}{
+		{
+			input:  "",
+			except: "elf",
+		},
+		{
+			input:  "kdump-zlib",
+			except: "kdump-zlib",
+		},
+		{
+			input:  "kdump-snappy",
+			except: "kdump-snappy",
+		},
+		{
+			input:  "kdump-lzo",
+			except: "kdump-lzo",
+		},
+		{
+			input:  "abc",
+			except: "elf",
+		},
+	}
+
+	h := hypervisor{}
+
+	for _, tc := range testCases {
+		h.GuestMemoryDumpFormat = tc.input
+		assert.Equal(t, tc.except, h.getGuestMemoryDumpFormat())
+	}
+}

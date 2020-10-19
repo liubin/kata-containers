@@ -43,6 +43,9 @@ import (
 // such as SeaBIOS or OVMF for instance, to handle this directly.
 const romFile = ""
 
+// default host path for saving guest kernel memory dump file
+const defaultDumpSavePath = "/var/crash"
+
 // disable-modern is a option to QEMU that will fall back to using 0.9 version
 // of virtio. Since moving to QEMU4.0, we can start using virtio 1.0 version.
 // Default value is false.
@@ -81,6 +84,7 @@ type qemu struct {
 	config HypervisorConfig
 
 	qmpMonitorCh qmpChannel
+	qmpManageCh  qmpChannel
 
 	qemuConfig govmmQemu.Config
 
@@ -102,9 +106,10 @@ type qemu struct {
 }
 
 const (
-	consoleSocket = "console.sock"
-	qmpSocket     = "qmp.sock"
-	vhostFSSocket = "vhost-fs.sock"
+	consoleSocket   = "console.sock"
+	qmpSocket       = "qmp.sock"
+	manageQmpSocket = "manage-qmp.sock"
+	vhostFSSocket   = "vhost-fs.sock"
 
 	qmpCapErrMsg  = "Failed to negoatiate QMP capabilities"
 	qmpExecCatCmd = "exec:cat"
@@ -322,7 +327,7 @@ func (q *qemu) memoryTopology() (govmmQemu.Memory, error) {
 	return q.arch.memoryTopology(memMb, hostMemMb, uint8(q.config.MemSlots)), nil
 }
 
-func (q *qemu) qmpSocketPath(id string) (string, error) {
+func (q *qemu) qmpSocketPath(id, qmpSocket string) (string, error) {
 	return utils.BuildSocketPath(q.store.RunVMStoragePath(), id, qmpSocket)
 }
 
@@ -357,7 +362,7 @@ func (q *qemu) appendImage(devices []govmmQemu.Device) ([]govmmQemu.Device, erro
 }
 
 func (q *qemu) createQmpSocket() ([]govmmQemu.QMPSocket, error) {
-	monitorSockPath, err := q.qmpSocketPath(q.id)
+	monitorSockPath, err := q.qmpSocketPath(q.id, qmpSocket)
 	if err != nil {
 		return nil, err
 	}
@@ -367,14 +372,34 @@ func (q *qemu) createQmpSocket() ([]govmmQemu.QMPSocket, error) {
 		path: monitorSockPath,
 	}
 
-	return []govmmQemu.QMPSocket{
+	qmpSockets := []govmmQemu.QMPSocket{
 		{
 			Type:   "unix",
 			Name:   q.qmpMonitorCh.path,
 			Server: true,
 			NoWait: true,
 		},
-	}, nil
+	}
+
+	if q.config.PVPanicEnabled || q.config.GuestMemoryDumpEnabled {
+		manageSockPath, err := q.qmpSocketPath(q.id, manageQmpSocket)
+		if err != nil {
+			return nil, err
+		}
+
+		q.qmpManageCh = qmpChannel{
+			ctx:  q.ctx,
+			path: manageSockPath,
+		}
+		qmpSockets = append(qmpSockets, govmmQemu.QMPSocket{
+			Type:   "unix",
+			Name:   q.qmpManageCh.path,
+			Server: true,
+			NoWait: true,
+		})
+	}
+
+	return qmpSockets, nil
 }
 
 func (q *qemu) buildDevices(initrdPath string) ([]govmmQemu.Device, *govmmQemu.IOThread, error) {
@@ -408,13 +433,17 @@ func (q *qemu) buildDevices(initrdPath string) ([]govmmQemu.Device, *govmmQemu.I
 		}
 	}
 
+	if q.config.PVPanicEnabled || q.config.GuestMemoryDumpEnabled {
+		// there should have no errors for pvpanic device
+		devices, _ = q.arch.appendPVPanicDevicc(devices)
+	}
+
 	var ioThread *govmmQemu.IOThread
 	if q.config.BlockDeviceDriver == config.VirtioSCSI {
 		return q.arch.appendSCSIController(devices, q.config.EnableIOThreads)
 	}
 
 	return devices, ioThread, nil
-
 }
 
 func (q *qemu) setupTemplate(knobs *govmmQemu.Knobs, memory *govmmQemu.Memory) govmmQemu.Incoming {
@@ -1027,7 +1056,8 @@ func (q *qemu) qmpSetup() error {
 		return nil
 	}
 
-	cfg := govmmQemu.QMPConfig{Logger: newQMPLogger()}
+	events := make(chan govmmQemu.QMPEvent)
+	cfg := govmmQemu.QMPConfig{Logger: newQMPLogger(), EventCh: events}
 
 	// Auto-closed by QMPStart().
 	disconnectCh := make(chan struct{})
@@ -1047,7 +1077,107 @@ func (q *qemu) qmpSetup() error {
 	q.qmpMonitorCh.qmp = qmp
 	q.qmpMonitorCh.disconn = disconnectCh
 
+	go q.loopQMPEvent(events)
+
 	return nil
+}
+
+func (q *qemu) loopQMPEvent(event chan govmmQemu.QMPEvent) {
+	for {
+		select {
+		case e, open := <-event:
+			if !open {
+				q.Logger().Infof("QMP event channel closed")
+				return
+			}
+			q.Logger().Debugf("got new QMP event %+v", e)
+			if e.Name == "GUEST_PANICKED" {
+				go q.handleGuestPanic()
+			}
+		}
+	}
+}
+
+func (q *qemu) handleGuestPanic() {
+	if q.config.GuestMemoryDumpEnabled {
+		q.dumpGuestMemory()
+	}
+	// TODO: how to notify the upper level sandbox to handle the error
+	// to do a fast fail(shutdown or others).
+}
+
+func (q *qemu) dumpGuestMemory() error {
+	q.Logger().Info("try to dump guest memory")
+	dumpSavePath := q.config.GuestMemoryDumpPath
+	if dumpSavePath == "" {
+		dumpSavePath = dumpSavePath
+	}
+
+	if _, err := os.Stat(dumpSavePath); os.IsNotExist(err) {
+		os.MkdirAll(dumpSavePath, 0755)
+	}
+
+	protocol := fmt.Sprintf("file:%s/vmcore-%s.%s", dumpSavePath, q.id, q.config.GuestMemoryDumpFormat)
+	q.Logger().Info("try to dump guest memory to %s", protocol)
+
+	err := q.manageQmpSetup()
+	if err != nil {
+		q.Logger().WithError(err).Error("setup manage QMP failed")
+		return err
+	}
+	defer q.manageQmpShutdown()
+
+	if err := q.qmpManageCh.qmp.ExecuteDumpGuestMemory(q.qmpManageCh.ctx, protocol, q.config.GuestMemoryDumpPaging, q.config.GuestMemoryDumpFormat); err != nil {
+		q.Logger().WithError(err).Error("dump guest memory failed")
+		return err
+	}
+
+	q.Logger().Info("dump guest memory completed")
+	return nil
+}
+
+// manageQmpSetup is used to manage qemu via manage-qmp.sock,
+// it's called by different path than shim v2.
+func (q *qemu) manageQmpSetup() error {
+	if q.qmpManageCh.qmp != nil {
+		return nil
+	}
+
+	cfg := govmmQemu.QMPConfig{
+		Logger: qmpLogger{
+			logger: virtLog.WithField("subsystem", "manage-qmp")},
+	}
+
+	// Auto-closed by QMPStart().
+	disconnectCh := make(chan struct{})
+
+	qmp, _, err := govmmQemu.QMPStart(q.qmpManageCh.ctx, q.qmpManageCh.path, cfg, disconnectCh)
+	if err != nil {
+		q.Logger().WithError(err).Error("Failed to connect to QEMU instance")
+		return err
+	}
+
+	err = qmp.ExecuteQMPCapabilities(q.qmpManageCh.ctx)
+	if err != nil {
+		qmp.Shutdown()
+		q.Logger().WithError(err).Error(qmpCapErrMsg)
+		return err
+	}
+	q.qmpManageCh.qmp = qmp
+	q.qmpManageCh.disconn = disconnectCh
+
+	return nil
+}
+
+func (q *qemu) manageQmpShutdown() {
+	if q.qmpManageCh.qmp != nil {
+		q.qmpManageCh.qmp.Shutdown()
+		// wait on disconnected channel to be sure that the qmp channel has
+		// been closed cleanly.
+		<-q.qmpManageCh.disconn
+		q.qmpManageCh.qmp = nil
+		q.qmpManageCh.disconn = nil
+	}
 }
 
 func (q *qemu) qmpShutdown() {

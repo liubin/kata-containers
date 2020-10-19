@@ -319,6 +319,42 @@ valid_file_mem_backends = @DEFVALIDFILEMEMBACKENDS@
 # Default 0-sized value means unlimited rate.
 #tx_rate_limiter_max_rate = 0
 
+# pvpanic device is a simulated ISA device, through which a guest panic
+# event is sent to qemu, and a QMP GUEST_PANICKED event is generated.
+# This allows management apps to be notified and respond to the event.
+#
+# Note:
+#   To enable pvpanic device, you must set
+#   CONFIG_PVPANIC=y for your kernel.
+#pvpanic_enabled=false
+
+# If true, when GUEST_PANICKED event occurred,
+# guest memeory will be dumped using
+# "dump-guest-memory" command.
+#
+# The dumped file(also called vmcore) can be processed with crash or gdb.
+#
+# Note:
+#  Enabling "guest_memory_dump_enabled" will enable "pvpanic_enabled" implicitly.
+#guest_memory_dump_enabled=false
+
+# Set where to save the guest memory dump file.
+#guest_memory_dump_path="/var/crash"
+
+# Set dump format. Valid format includes:
+#  - elf
+#  - kdump-zlib
+#  - kdump-snappy
+#  - kdump-lazo
+# Any value other than these will be omit, and use "elf" as default format.
+#guest_memory_dump_format=elf
+
+# If enable paging.
+# Basically, if you want to use "gdb" rather than "crash",
+# or need the guest-virtual addresses in the ELF vmcore,
+# then you should enable paging.
+#guest_memory_dump_paging=false
+
 [factory]
 # VM templating support. Once enabled, new VMs are created from template
 # using vm cloning. They will share the same initial kernel, initramfs and

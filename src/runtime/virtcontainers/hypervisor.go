@@ -440,6 +440,25 @@ type HypervisorConfig struct {
 
 	// Enable annotations by name
 	EnableAnnotations []string
+
+	// PVPanicEnabled control the behaviour whether the runtime should catch "GUEST_PANICKED"
+	// and propagate it to outside the guest
+	PVPanicEnabled bool
+
+	// GuestMemoryDumpEnabled control the behaviour whether the runtime should dump guest memory at kernel
+	// panic automatically
+	GuestMemoryDumpEnabled bool
+
+	// GuestCoredumpPath is the path in host for saving guest memory dump
+	GuestMemoryDumpPath string
+
+	// GuestMemoryDumpFormat is one of kdump-compressed format:
+	// elf, kdump-zlib, kdump-lzo, or kdump-snappy
+	GuestMemoryDumpFormat string
+
+	// GuestMemoryDumpPaging is used to indicate if enable paging
+	// for QEMU dump-guest-memory command
+	GuestMemoryDumpPaging bool
 }
 
 // vcpu mapping from vcpu number to thread number

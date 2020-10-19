@@ -125,6 +125,11 @@ type hypervisor struct {
 	RxRateLimiterMaxRate    uint64   `toml:"rx_rate_limiter_max_rate"`
 	TxRateLimiterMaxRate    uint64   `toml:"tx_rate_limiter_max_rate"`
 	EnableAnnotations       []string `toml:"enable_annotations"`
+	PVPanicEnabled          bool     `toml:"pvpanic_enabled"`
+	GuestMemoryDumpEnabled  bool     `toml:"guest_memory_dump_enabled"`
+	GuestMemoryDumpPath     string   `toml:"guest_memory_dump_path"`
+	GuestMemoryDumpFormat   string   `toml:"guest_memory_dump_format"`
+	GuestMemoryDumpPaging   bool     `toml:"guest_memory_dump_paging"`
 }
 
 type runtime struct {
@@ -440,6 +445,15 @@ func (h hypervisor) getTxRateLimiterCfg() (uint64, error) {
 	return h.TxRateLimiterMaxRate, nil
 }
 
+func (h hypervisor) getGuestMemoryDumpFormat() string {
+	switch h.GuestMemoryDumpFormat {
+	case "elf", "kdump-zlib", "kdump-snappy", "kdump-lzo":
+		return h.GuestMemoryDumpFormat
+	default:
+		return "elf"
+	}
+}
+
 func (h hypervisor) getIOMMUPlatform() bool {
 	if h.IOMMUPlatform {
 		kataUtilsLogger.Info("IOMMUPlatform is enabled by default.")
@@ -688,6 +702,11 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		RxRateLimiterMaxRate:    rxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:    txRateLimiterMaxRate,
 		EnableAnnotations:       h.EnableAnnotations,
+		PVPanicEnabled:          h.PVPanicEnabled,
+		GuestMemoryDumpEnabled:  h.GuestMemoryDumpEnabled,
+		GuestMemoryDumpPath:     h.GuestMemoryDumpPath,
+		GuestMemoryDumpFormat:   h.getGuestMemoryDumpFormat(),
+		GuestMemoryDumpPaging:   h.GuestMemoryDumpPaging,
 	}, nil
 }
 
@@ -844,7 +863,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DisableVhostNet:         true,
 		VirtioFSExtraArgs:       h.VirtioFSExtraArgs,
 		SGXEPCSize:              defaultSGXEPCSize,
-		EnableAnnotations:     h.EnableAnnotations,
+		EnableAnnotations:       h.EnableAnnotations,
 	}, nil
 }
 
