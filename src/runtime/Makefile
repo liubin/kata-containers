@@ -36,6 +36,7 @@ ARCH_FILE_SUFFIX = -options.mk
 ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
 ARCH_FILES = $(wildcard arch/*$(ARCH_FILE_SUFFIX))
 ALL_ARCHES = $(patsubst $(ARCH_DIR)/%$(ARCH_FILE_SUFFIX),%,$(ARCH_FILES))
+BUILDTIME = $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 # Load architecture-dependent settings
 include $(ARCH_FILE)
@@ -603,8 +604,9 @@ $(SHIMV2_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
 	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && ln -fs $(GENERATED_CONFIG))
 	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && go build $(KATA_LDFLAGS) $(BUILDFLAGS) -o $@ .)
 
-$(MONITOR_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
-	$(QUIET_BUILD)(cd $(MONITOR_DIR)/ && go build $(KATA_LDFLAGS) $(BUILDFLAGS) -o $@ .)
+$(MONITOR_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) .git-commit
+	$(QUIET_BUILD)(cd $(MONITOR_DIR)/ && go build \
+		--ldflags "-X main.GitCommit=$(shell cat .git-commit) -X main.BuildTime=$(BUILDTIME)" -o $@ .)
 
 .PHONY: \
 	check \

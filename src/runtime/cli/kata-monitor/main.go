@@ -9,6 +9,8 @@ import (
 	"flag"
 	"net/http"
 	"os"
+	"runtime"
+	"text/template"
 	"time"
 
 	kataMonitor "github.com/kata-containers/kata-containers/src/runtime/pkg/kata-monitor"
@@ -20,7 +22,58 @@ var containerdAddr = flag.String("containerd-address", "/run/containerd/containe
 var containerdConfig = flag.String("containerd-conf", "/etc/containerd/config.toml", "Containerd config file.")
 var logLevel = flag.String("log-level", "info", "Log level of logrus(trace/debug/info/warn/error/fatal/panic).")
 
+// Default build-time variable.
+// These values are overridden via ldflags
+var (
+	appName = "kata-monitor"
+	// version is the kata monitor version.
+	version = "0.1.0"
+
+	GitCommit = "unknown-commit"
+	BuildTime = "unknown-buildtime"
+)
+
+type versionInfo struct {
+	AppName   string
+	Version   string
+	GitCommit string
+	GoVersion string
+	Os        string
+	Arch      string
+	BuildTime string
+}
+
+var versionTemplate = `{{.AppName}}
+ Version:	{{.Version}}
+ Go version:	{{.GoVersion}}
+ Git commit:	{{.GitCommit}}
+ Built:	{{.BuildTime}}
+ OS/Arch:	{{.Os}}/{{.Arch}}
+`
+
+func printVersion() {
+	t, err := template.New("version").Parse(versionTemplate)
+	ver := versionInfo{
+		AppName:   appName,
+		Version:   version,
+		GoVersion: runtime.Version(),
+		Os:        runtime.GOOS,
+		Arch:      runtime.GOARCH,
+		GitCommit: GitCommit,
+		BuildTime: BuildTime,
+	}
+
+	if err = t.Execute(os.Stdout, ver); err != nil {
+		panic(err)
+	}
+}
+
 func main() {
+	if len(os.Args) == 2 && (os.Args[1] == "--version" || os.Args[1] == "version") {
+		printVersion()
+		return
+	}
+
 	flag.Parse()
 
 	// init logrus
