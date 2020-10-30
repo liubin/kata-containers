@@ -9,6 +9,7 @@ import (
 	"context"
 	"runtime"
 
+	kataCloudEvents "github.com/kata-containers/kata-containers/src/runtime/pkg/cloudevents"
 	deviceApi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	deviceConfig "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cgroups"
@@ -52,21 +53,21 @@ func SetLogger(ctx context.Context, logger *logrus.Entry) {
 
 // CreateSandbox is the virtcontainers sandbox creation entry point.
 // CreateSandbox creates a sandbox and its containers. It does not start them.
-func CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (VCSandbox, error) {
+func CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory, publisher kataCloudEvents.Publisher) (VCSandbox, error) {
 	span, ctx := trace(ctx, "CreateSandbox")
 	defer span.Finish()
 
-	s, err := createSandboxFromConfig(ctx, sandboxConfig, factory)
+	s, err := createSandboxFromConfig(ctx, sandboxConfig, factory, publisher)
 
 	return s, err
 }
 
-func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (_ *Sandbox, err error) {
+func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, factory Factory, publisher kataCloudEvents.Publisher) (_ *Sandbox, err error) {
 	span, ctx := trace(ctx, "createSandboxFromConfig")
 	defer span.Finish()
 
 	// Create the sandbox.
-	s, err := createSandbox(ctx, sandboxConfig, factory)
+	s, err := createSandbox(ctx, sandboxConfig, factory, publisher)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +136,7 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 // CleanupContainer is used by shimv2 to stop and delete a container exclusively, once there is no container
 // in the sandbox left, do stop the sandbox and delete it. Those serial operations will be done exclusively by
 // locking the sandbox.
-func CleanupContainer(ctx context.Context, sandboxID, containerID string, force bool) error {
+func CleanupContainer(ctx context.Context, sandboxID, containerID string, force bool, publisher kataCloudEvents.Publisher) error {
 	span, ctx := trace(ctx, "CleanupContainer")
 	defer span.Finish()
 
@@ -153,7 +154,7 @@ func CleanupContainer(ctx context.Context, sandboxID, containerID string, force 
 	}
 	defer unlock()
 
-	s, err := fetchSandbox(ctx, sandboxID)
+	s, err := fetchSandbox(ctx, sandboxID, publisher)
 	if err != nil {
 		return err
 	}

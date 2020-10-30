@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	cloudevents "github.com/cloudevents/sdk-go/v2"
 	eventstypes "github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/api/types/task"
 	"github.com/containerd/containerd/errdefs"
@@ -228,11 +229,23 @@ func (s *service) StartShim(ctx context.Context, id, containerdBinary, container
 
 func (s *service) forward(publisher events.Publisher) {
 	for e := range s.events {
-		ctx, cancel := context.WithTimeout(s.ctx, timeOut)
-		err := publisher.Publish(ctx, getTopic(e), e)
-		cancel()
-		if err != nil {
-			shimLog.WithError(err).Error("post event")
+		shimLog.WithField("event", e).Debug("got event")
+
+		// only publish legacy containerd event to containerd
+		if _, ok := e.(cloudevents.Event); !ok {
+			ctx, cancel := context.WithTimeout(s.ctx, timeOut)
+			err := publisher.Publish(ctx, getTopic(e), e)
+			cancel()
+			if err != nil {
+				shimLog.WithError(err).Error("post event")
+			}
+		} else {
+			shimLog.Info("skip publishing non containerd event to containerd")
+		}
+
+		// process as cloud event
+		if err := processCloudEvents(s.id, e); err != nil {
+			shimLog.WithError(err).Error("failed to process cloud event for %s", s.id)
 		}
 	}
 }
@@ -312,7 +325,7 @@ func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err e
 
 	switch containerType {
 	case vc.PodSandbox:
-		err = cleanupContainer(ctx, s.id, s.id, path)
+		err = s.cleanupContainer(ctx, s.id, s.id, path)
 		if err != nil {
 			return nil, err
 		}
@@ -322,7 +335,7 @@ func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err e
 			return nil, err
 		}
 
-		err = cleanupContainer(ctx, sandboxID, s.id, path)
+		err = s.cleanupContainer(ctx, sandboxID, s.id, path)
 		if err != nil {
 			return nil, err
 		}

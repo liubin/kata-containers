@@ -10,6 +10,7 @@ import (
 	"io"
 	"syscall"
 
+	kataCloudEvents "github.com/kata-containers/kata-containers/src/runtime/pkg/cloudevents"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
@@ -23,8 +24,8 @@ type VC interface {
 	SetLogger(ctx context.Context, logger *logrus.Entry)
 	SetFactory(ctx context.Context, factory Factory)
 
-	CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig) (VCSandbox, error)
-	CleanupContainer(ctx context.Context, sandboxID, containerID string, force bool) error
+	CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig, publisher kataCloudEvents.Publisher) (VCSandbox, error)
+	CleanupContainer(ctx context.Context, sandboxID, containerID string, force bool, publisher kataCloudEvents.Publisher) error
 }
 
 // VCSandbox is the Sandbox interface

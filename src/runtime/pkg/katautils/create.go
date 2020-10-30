@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	kataCloudEvents "github.com/kata-containers/kata-containers/src/runtime/pkg/cloudevents"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	vf "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/factory"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
@@ -102,7 +103,7 @@ func SetEphemeralStorageType(ociSpec specs.Spec) specs.Spec {
 
 // CreateSandbox create a sandbox container
 func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeConfig oci.RuntimeConfig, rootFs vc.RootFs,
-	containerID, bundlePath, console string, disableOutput, systemdCgroup bool) (_ vc.VCSandbox, _ vc.Process, err error) {
+	containerID, bundlePath, console string, disableOutput, systemdCgroup bool, publisher kataCloudEvents.Publisher) (_ vc.VCSandbox, _ vc.Process, err error) {
 	span, ctx := Trace(ctx, "createSandbox")
 	defer span.Finish()
 
@@ -151,7 +152,7 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 		return nil, vc.Process{}, err
 	}
 
-	sandbox, err := vci.CreateSandbox(ctx, sandboxConfig)
+	sandbox, err := vci.CreateSandbox(ctx, sandboxConfig, publisher)
 	if err != nil {
 		return nil, vc.Process{}, err
 	}

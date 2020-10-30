@@ -18,6 +18,7 @@ import (
 	"sync"
 	"syscall"
 
+	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"github.com/containerd/cgroups"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/opencontainers/runc/libcontainer/configs"
@@ -27,6 +28,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
+	kataCloudEvents "github.com/kata-containers/kata-containers/src/runtime/pkg/cloudevents"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/drivers"
@@ -194,6 +196,8 @@ type Sandbox struct {
 	ctx context.Context
 
 	cw *consoleWatcher
+
+	publisher kataCloudEvents.Publisher
 }
 
 // ID returns the sandbox identifier string.
@@ -437,7 +441,7 @@ func (s *Sandbox) getAndStoreGuestDetails() error {
 // It will create and store the sandbox structure, and then ask the hypervisor
 // to physically create that sandbox i.e. starts a VM for that sandbox to eventually
 // be started.
-func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) {
+func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory, publisher kataCloudEvents.Publisher) (*Sandbox, error) {
 	span, ctx := trace(ctx, "createSandbox")
 	defer span.Finish()
 
@@ -445,7 +449,7 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 		return nil, err
 	}
 
-	s, err := newSandbox(ctx, sandboxConfig, factory)
+	s, err := newSandbox(ctx, sandboxConfig, factory, publisher)
 	if err != nil {
 		return nil, err
 	}
@@ -475,7 +479,7 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 	return s, nil
 }
 
-func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (sb *Sandbox, retErr error) {
+func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory, publisher kataCloudEvents.Publisher) (sb *Sandbox, retErr error) {
 	span, ctx := trace(ctx, "newSandbox")
 	defer span.Finish()
 
@@ -507,6 +511,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		sharePidNs:      sandboxConfig.SharePidNs,
 		networkNS:       NetworkNamespace{NetNsPath: sandboxConfig.NetworkConfig.NetNSPath},
 		ctx:             ctx,
+		publisher:       publisher,
 	}
 
 	if s.newStore, err = persist.GetDriver(); err != nil || s.newStore == nil {
@@ -644,7 +649,7 @@ func rwLockSandbox(sandboxID string) (func() error, error) {
 }
 
 // fetchSandbox fetches a sandbox config from a sandbox ID and returns a sandbox.
-func fetchSandbox(ctx context.Context, sandboxID string) (sandbox *Sandbox, err error) {
+func fetchSandbox(ctx context.Context, sandboxID string, publisher kataCloudEvents.Publisher) (sandbox *Sandbox, err error) {
 	virtLog.Info("fetch sandbox")
 	if sandboxID == "" {
 		return nil, vcTypes.ErrNeedSandboxID
@@ -667,7 +672,7 @@ func fetchSandbox(ctx context.Context, sandboxID string) (sandbox *Sandbox, err 
 	config = *c
 
 	// fetchSandbox is not suppose to create new sandbox VM.
-	sandbox, err = createSandbox(ctx, config, nil)
+	sandbox, err = createSandbox(ctx, config, nil, publisher)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create sandbox with config %+v: %v", config, err)
 	}
@@ -1046,6 +1051,17 @@ func (cw *consoleWatcher) stop() {
 func (s *Sandbox) startVM() (err error) {
 	span, ctx := s.trace("startVM")
 	defer span.Finish()
+
+	defer func() {
+		data := map[string]interface{}{"sandbox": s.id, "hypervisorConfig": s.config.HypervisorConfig}
+		eventType := kataCloudEvents.EventTypeNormal
+		if err != nil {
+			eventType = kataCloudEvents.EventTypeError
+			data["error"] = err.Error()
+		}
+		event := kataCloudEvents.NewCloudEvent(eventType, "start-vm", data)
+		s.publish(event)
+	}()
 
 	s.Logger().Info("Starting VM")
 
@@ -2345,4 +2361,17 @@ func (s *Sandbox) getSandboxCPUSet() (string, string, error) {
 	}
 
 	return cpuResult.String(), memResult.String(), nil
+}
+
+func (s *Sandbox) publish(event cloudevents.Event) {
+	s.Logger().WithFields(logrus.Fields{
+		"sandboxid": s.id,
+		"event":     event,
+	}).Debug("send cloud event")
+
+	if s.publisher != nil {
+		if err := s.publisher.Publish(event); err != nil {
+			s.Logger().WithError(err).Error("send cloud event failed")
+		}
+	}
 }

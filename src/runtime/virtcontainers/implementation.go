@@ -12,6 +12,7 @@ package virtcontainers
 import (
 	"context"
 
+	kataCloudEvents "github.com/kata-containers/kata-containers/src/runtime/pkg/cloudevents"
 	"github.com/sirupsen/logrus"
 )
 
@@ -31,13 +32,13 @@ func (impl *VCImpl) SetFactory(ctx context.Context, factory Factory) {
 }
 
 // CreateSandbox implements the VC function of the same name.
-func (impl *VCImpl) CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig) (VCSandbox, error) {
-	return CreateSandbox(ctx, sandboxConfig, impl.factory)
+func (impl *VCImpl) CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig, publisher kataCloudEvents.Publisher) (VCSandbox, error) {
+	return CreateSandbox(ctx, sandboxConfig, impl.factory, publisher)
 }
 
 // CleanupContainer is used by shimv2 to stop and delete a container exclusively, once there is no container
 // in the sandbox left, do stop the sandbox and delete it. Those serial operations will be done exclusively by
 // locking the sandbox.
-func (impl *VCImpl) CleanupContainer(ctx context.Context, sandboxID, containerID string, force bool) error {
-	return CleanupContainer(ctx, sandboxID, containerID, force)
+func (impl *VCImpl) CleanupContainer(ctx context.Context, sandboxID, containerID string, force bool, publisher kataCloudEvents.Publisher) error {
+	return CleanupContainer(ctx, sandboxID, containerID, force, publisher)
 }

@@ -105,6 +105,13 @@ func main() {
 	m.Handle("/sandboxes", http.HandlerFunc(km.ListSandboxes))
 	m.Handle("/agent-url", http.HandlerFunc(km.GetAgentURL))
 
+	if eventHandler, err := km.EventsHandler(); err != nil {
+		logrus.WithError(err).Error("failed to create cloud events handler")
+	} else {
+		logrus.Info("add cloud events handler")
+		m.Handle("/events", eventHandler)
+	}
+
 	// for debug shim process
 	m.Handle("/debug/vars", http.HandlerFunc(km.ExpvarHandler))
 	m.Handle("/debug/pprof/", http.HandlerFunc(km.PprofIndex))

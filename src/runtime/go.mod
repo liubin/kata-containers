@@ -4,8 +4,9 @@ go 1.14
 
 require (
 	github.com/BurntSushi/toml v0.3.1
-	github.com/blang/semver v0.0.0-20190414102917-ba2c2ddd8906
+	github.com/blang/semver v3.5.1+incompatible
 	github.com/cilium/ebpf v0.0.0-20200421083123-d05ecd062fb1 // indirect
+	github.com/cloudevents/sdk-go/v2 v2.3.1
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/containerd/cgroups v0.0.0-20190717030353-c4b9ac5c7601
 	github.com/containerd/console v0.0.0-20191206165004-02ecf6a7291e
@@ -33,6 +34,7 @@ require (
 	github.com/gogo/protobuf v1.3.1
 	github.com/hashicorp/go-multierror v1.0.0
 	github.com/intel/govmm v0.0.0-20200825065022-6042f6033126
+	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/mdlayher/vsock v0.0.0-20191108225356-d9c65923cb8f
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/opencontainers/runc v1.0.0-rc9.0.20200102164712-2b52db75279c
@@ -48,7 +50,7 @@ require (
 	github.com/seccomp/libseccomp-golang v0.9.1 // indirect
 	github.com/sirupsen/logrus v1.4.2
 	github.com/smartystreets/goconvey v1.6.4 // indirect
-	github.com/stretchr/testify v1.4.0
+	github.com/stretchr/testify v1.5.1
 	github.com/syndtr/gocapability v0.0.0-20180916011248-d98352740cb2 // indirect
 	github.com/uber/jaeger-client-go v0.0.0-20200422204034-e1cd868603cb
 	github.com/uber/jaeger-lib v2.2.0+incompatible // indirect
@@ -59,6 +61,8 @@ require (
 	golang.org/x/net v0.0.0-20200707034311-ab3426394381
 	golang.org/x/oauth2 v0.0.0-20191122200657-5d9234df094c
 	golang.org/x/sys v0.0.0-20200622214017-ed371f2e16b4
+	google.golang.org/appengine v1.5.0 // indirect
+	google.golang.org/genproto v0.0.0-20190425155659-357c62f0e4bb // indirect
 	google.golang.org/grpc v1.19.0
 	gotest.tools v2.2.0+incompatible // indirect
 	k8s.io/apimachinery v0.18.2
@@ -66,5 +70,6 @@ require (
 
 replace (
 	github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
+	go.opencensus.io => go.opencensus.io v0.21.0
 	gotest.tools/v3 => gotest.tools v2.2.0+incompatible
 )
