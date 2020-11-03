@@ -514,6 +514,10 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		publisher:       publisher,
 	}
 
+	if err := publisher.StartPublisher("/tmp/kata"); err != nil {
+		return nil, err
+	}
+
 	if s.newStore, err = persist.GetDriver(); err != nil || s.newStore == nil {
 		return nil, fmt.Errorf("failed to get fs persist driver: %v", err)
 	}

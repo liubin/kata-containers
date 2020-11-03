@@ -127,6 +127,9 @@ type service struct {
 
 	ec chan exit
 	id string
+
+	// eventFile for events
+	eventFile *os.File
 }
 
 func newCommand(ctx context.Context, containerdBinary, id, containerdAddress string) (*sysexec.Cmd, error) {
@@ -244,7 +247,7 @@ func (s *service) forward(publisher events.Publisher) {
 		}
 
 		// process as cloud event
-		if err := processCloudEvents(s.id, e); err != nil {
+		if err := s.processCloudEvents(e); err != nil {
 			shimLog.WithError(err).Error("failed to process cloud event for %s", s.id)
 		}
 	}
@@ -328,6 +331,12 @@ func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err e
 		err = s.cleanupContainer(ctx, s.id, s.id, path)
 		if err != nil {
 			return nil, err
+		}
+		if s.eventFile != nil {
+			s.eventFile = nil
+			if err := s.eventFile.Close(); err != nil {
+				return nil, err
+			}
 		}
 	case vc.PodContainer:
 		sandboxID, err := oci.SandboxID(ociSpec)

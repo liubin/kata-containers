@@ -23,6 +23,7 @@ const (
 
 type Publisher interface {
 	Publish(event cloudevents.Event) error
+	StartPublisher(path string) error
 }
 
 func NewCloudEvent(eventType, subject string, data map[string]interface{}) cloudevents.Event {
