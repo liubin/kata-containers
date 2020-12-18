@@ -82,7 +82,7 @@ pub fn setup_signal_handler(
                             ) {
                             Ok(s) => {
                                 if s == WaitStatus::StillAlive {
-                                    break 'nextevent;
+                                    continue 'nextevent;
                                 }
                                 s
                             }
@@ -92,7 +92,7 @@ pub fn setup_signal_handler(
                                     "waitpid reaper failed";
                                     "error" => e.as_errno().unwrap().desc()
                                 );
-                                break 'nextevent;
+                                continue 'nextevent;
                             }
                         };
 
