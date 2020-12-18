@@ -62,7 +62,7 @@ fn handle_trace_data(
         match reader.read_exact(&mut header) {
             Ok(_) => debug!(logger, "read header"),
             Err(e) => {
-                if e.kind() == ErrorKind::UnexpectedEof {
+                if e.kind() == ErrorKind::UnexpectedEof || e.kind() == ErrorKind::ConnectionReset{
                     info!(logger, "agent shut down");
                     break;
                 }
