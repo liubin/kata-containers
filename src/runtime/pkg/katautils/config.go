@@ -1089,6 +1089,7 @@ func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolved
 
 	config.Trace = tomlConf.Runtime.Tracing
 	tracing = config.Trace
+	kataUtilsLogger.Errorf("AAAAAAAAAA %+v", tracing)
 
 	if tomlConf.Runtime.InterNetworkModel != "" {
 		err = config.InterNetworkModel.SetModel(tomlConf.Runtime.InterNetworkModel)

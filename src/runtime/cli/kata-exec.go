@@ -68,7 +68,7 @@ var kataExecCLICommand = cli.Command{
 			return err
 		}
 		span, _ := katautils.Trace(ctx, subCommandName)
-		defer span.Finish()
+		defer span.End()
 
 		endPoint := context.String(paramKataMonitorAddr)
 		if endPoint == "" {

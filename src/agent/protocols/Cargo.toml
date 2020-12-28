@@ -5,7 +5,7 @@ authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
 
 [dependencies]
-ttrpc = "0.3.0"
+ttrpc = { git = "https://github.com/liubin/ttrpc-rust", branch = "add-metadata-for-ttrpc-context"}
 protobuf = "=2.14.0"
 futures = "0.1.27"
 

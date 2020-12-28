@@ -184,7 +184,7 @@ type agent interface {
 	listRoutes() ([]*pbTypes.Route, error)
 
 	// getGuestDetails will tell the agent to get some information of guest
-	getGuestDetails(*grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error)
+	getGuestDetails(context.Context, *grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error)
 
 	// setGuestDateTime asks the agent to set guest time to the provided one
 	setGuestDateTime(time.Time) error

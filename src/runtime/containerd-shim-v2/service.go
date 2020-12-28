@@ -78,6 +78,11 @@ func New(ctx context.Context, id string, publisher events.Publisher) (cdshim.Shi
 	vci.SetLogger(ctx, shimLog)
 	katautils.SetLogger(ctx, shimLog, shimLog.Logger.Level)
 
+	// create tracer
+	if _, err := katautils.InitTracing("kata"); err != nil {
+		return nil, err
+	}
+
 	ctx, cancel := context.WithCancel(ctx)
 
 	s := &service{

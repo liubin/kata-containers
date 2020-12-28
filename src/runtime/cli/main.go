@@ -25,7 +25,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/oci"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
-	opentracing "github.com/opentracing/opentracing-go"
+
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -211,17 +211,17 @@ func setupSignalHandler(ctx context.Context) {
 // setExternalLoggers registers the specified logger with the external
 // packages which accept a logger to handle their own logging.
 func setExternalLoggers(ctx context.Context, logger *logrus.Entry) {
-	var span opentracing.Span
+	// var span otelTrace.Span
 
 	// Only create a new span if a root span already exists. This is
 	// required to ensure that this function will not disrupt the root
 	// span logic by creating a span before the proper root span has been
 	// created.
 
-	if opentracing.SpanFromContext(ctx) != nil {
-		span, ctx = katautils.Trace(ctx, "setExternalLoggers")
-		defer span.Finish()
-	}
+	// if opentracing.SpanFromContext(ctx) != nil {
+	// 	span, ctx = katautils.Trace(ctx, "setExternalLoggers")
+	// 	defer span.End()
+	// }
 
 	// Set virtcontainers logger.
 	vci.SetLogger(ctx, logger)
@@ -378,33 +378,34 @@ func handleShowConfig(context *cli.Context) {
 }
 
 func setupTracing(context *cli.Context, rootSpanName string) error {
-	tracer, err := katautils.CreateTracer(name)
-	if err != nil {
-		fatal(err)
-	}
+	// FIXME!!!
+	// tracer, err := katautils.InitTracer(name)
+	// if err != nil {
+	// 	fatal(err)
+	// }
 
-	// Create the root span now that the sub-command name is
-	// known.
-	//
-	// Note that this "Before" function is called (and returns)
-	// before the subcommand handler is called. As such, we cannot
-	// "Finish()" the span here - that is handled in the .After
-	// function.
-	span := tracer.StartSpan(rootSpanName)
+	// // Create the root span now that the sub-command name is
+	// // known.
+	// //
+	// // Note that this "Before" function is called (and returns)
+	// // before the subcommand handler is called. As such, we cannot
+	// // "Finish()" the span here - that is handled in the .After
+	// // function.
+	// span := tracer.StartSpan(rootSpanName)
 
-	ctx, err := cliContextToContext(context)
-	if err != nil {
-		return err
-	}
+	// ctx, err := cliContextToContext(context)
+	// if err != nil {
+	// 	return err
+	// }
 
-	span.SetTag("subsystem", "runtime")
+	// span.SetTag("subsystem", "runtime")
 
-	// Associate the root span with the context
-	ctx = opentracing.ContextWithSpan(ctx, span)
+	// // Associate the root span with the context
+	// ctx = opentracing.ContextWithSpan(ctx, span)
 
-	// Add tracer to metadata and update the context
-	context.App.Metadata["tracer"] = tracer
-	context.App.Metadata["context"] = ctx
+	// // Add tracer to metadata and update the context
+	// context.App.Metadata["tracer"] = tracer
+	// context.App.Metadata["context"] = ctx
 
 	return nil
 }

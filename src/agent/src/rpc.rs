@@ -1004,13 +1004,14 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
     fn create_sandbox(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::CreateSandboxRequest,
     ) -> ttrpc::Result<Empty> {
         {
             let sandbox = self.sandbox.clone();
             let mut s = sandbox.lock().unwrap();
-
+            error!(
+                sl!(), "AAAAAAAAAAAa {:?}", ctx);
             let _ = fs::remove_dir_all(CONTAINER_BASE);
             let _ = fs::create_dir_all(CONTAINER_BASE);
 
@@ -1138,10 +1139,10 @@ impl protocols::agent_ttrpc::AgentService for agentService {
 
     fn get_guest_details(
         &self,
-        _ctx: &ttrpc::TtrpcContext,
+        ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::GuestDetailsRequest,
     ) -> ttrpc::Result<GuestDetailsResponse> {
-        info!(sl!(), "get guest details!");
+        info!(sl!(), "AAAAAAAAAAAAA get guest details! {:?}",ctx);
         let mut resp = GuestDetailsResponse::new();
         // to get memory block size
         match get_memory_info(req.mem_block_size, req.mem_hotplug_probe) {

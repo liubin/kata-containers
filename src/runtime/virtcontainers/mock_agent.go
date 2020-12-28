@@ -205,7 +205,7 @@ func (n *mockAgent) setAgentURL() error {
 }
 
 // getGuestDetails is the Noop agent GuestDetails queryer. It does nothing.
-func (n *mockAgent) getGuestDetails(*grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error) {
+func (n *mockAgent) getGuestDetails(context.Context, *grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error) {
 	return nil, nil
 }
 

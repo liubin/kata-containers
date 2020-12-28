@@ -18,6 +18,10 @@ import (
 	"syscall"
 	"time"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/label"
+	otelTrace "go.opentelemetry.io/otel/trace"
+
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
@@ -34,7 +38,6 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/opencontainers/runtime-spec/specs-go"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"golang.org/x/sys/unix"
@@ -232,16 +235,15 @@ type kataAgent struct {
 	ctx      context.Context
 }
 
-func (k *kataAgent) trace(name string) (opentracing.Span, context.Context) {
+func (k *kataAgent) trace(name string) (otelTrace.Span, context.Context) {
 	if k.ctx == nil {
 		k.Logger().WithField("type", "bug").Error("trace called before context set")
 		k.ctx = context.Background()
 	}
 
-	span, ctx := opentracing.StartSpanFromContext(k.ctx, name)
-
-	span.SetTag("subsystem", "agent")
-	span.SetTag("type", "kata")
+	tracer := otel.Tracer("kata")
+	ctx, span := tracer.Start(k.ctx, name)
+	span.SetAttributes([]label.KeyValue{label.Key("subsystem").String("agent"), label.Key("type").String("kata")}...)
 
 	return span, ctx
 }
@@ -330,7 +332,7 @@ func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config KataAgent
 	k.ctx = sandbox.ctx
 
 	span, _ := k.trace("init")
-	defer span.Finish()
+	defer span.End()
 
 	disableVMShutdown = k.handleTraceSettings(config)
 	k.keepConn = config.LongLiveConn
@@ -445,7 +447,7 @@ func (k *kataAgent) setupSharedPath(sandbox *Sandbox) error {
 
 func (k *kataAgent) createSandbox(sandbox *Sandbox) error {
 	span, _ := k.trace("createSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	if err := k.setupSharedPath(sandbox); err != nil {
 		return err
@@ -532,7 +534,7 @@ func cmdEnvsToStringSlice(ev []types.EnvVar) []string {
 
 func (k *kataAgent) exec(sandbox *Sandbox, c Container, cmd types.Cmd) (*Process, error) {
 	span, _ := k.trace("exec")
-	defer span.Finish()
+	defer span.End()
 
 	var kataProcess *grpc.Process
 
@@ -704,7 +706,7 @@ func (k *kataAgent) getDNS(sandbox *Sandbox) ([]string, error) {
 
 func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 	span, _ := k.trace("startSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	if err := k.setAgentURL(); err != nil {
 		return err
@@ -859,7 +861,7 @@ func setupStorages(sandbox *Sandbox) []*grpc.Storage {
 
 func (k *kataAgent) stopSandbox(sandbox *Sandbox) error {
 	span, _ := k.trace("stopSandbox")
-	defer span.Finish()
+	defer span.End()
 
 	req := &grpc.DestroySandboxRequest{}
 
@@ -1221,7 +1223,7 @@ func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPat
 
 func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process, err error) {
 	span, _ := k.trace("createContainer")
-	defer span.Finish()
+	defer span.End()
 
 	var ctrStorages []*grpc.Storage
 	var ctrDevices []*grpc.Device
@@ -1540,7 +1542,7 @@ func (k *kataAgent) handlePidNamespace(grpcSpec *grpc.Spec, sandbox *Sandbox) bo
 
 func (k *kataAgent) startContainer(sandbox *Sandbox, c *Container) error {
 	span, _ := k.trace("startContainer")
-	defer span.Finish()
+	defer span.End()
 
 	req := &grpc.StartContainerRequest{
 		ContainerId: c.id,
@@ -1552,7 +1554,7 @@ func (k *kataAgent) startContainer(sandbox *Sandbox, c *Container) error {
 
 func (k *kataAgent) stopContainer(sandbox *Sandbox, c Container) error {
 	span, _ := k.trace("stopContainer")
-	defer span.Finish()
+	defer span.End()
 
 	_, err := k.sendReq(&grpc.RemoveContainerRequest{ContainerId: c.id})
 	return err
@@ -1706,6 +1708,38 @@ func (k *kataAgent) statsContainer(sandbox *Sandbox, c Container) (*ContainerSta
 	return containerStats, nil
 }
 
+func (k *kataAgent) connect2() error {
+	if k.dead {
+		return errors.New("Dead agent")
+	}
+	// lockless quick pass
+	if k.client != nil {
+		return nil
+	}
+
+	span, _ := k.trace("connect")
+	defer span.End()
+
+	// This is for the first connection only, to prevent race
+	k.Lock()
+	defer k.Unlock()
+	if k.client != nil {
+		return nil
+	}
+
+	k.Logger().WithField("url", k.state.URL).Info("New client")
+	client, err := kataclient.NewAgentClient(k.ctx, k.state.URL)
+	if err != nil {
+		k.dead = true
+		return err
+	}
+
+	k.installReqFunc(client)
+	k.client = client
+
+	return nil
+}
+
 func (k *kataAgent) connect() error {
 	if k.dead {
 		return errors.New("Dead agent")
@@ -1716,7 +1750,7 @@ func (k *kataAgent) connect() error {
 	}
 
 	span, _ := k.trace("connect")
-	defer span.Finish()
+	defer span.End()
 
 	// This is for the first connection only, to prevent race
 	k.Lock()
@@ -1740,7 +1774,7 @@ func (k *kataAgent) connect() error {
 
 func (k *kataAgent) disconnect() error {
 	span, _ := k.trace("disconnect")
-	defer span.Finish()
+	defer span.End()
 
 	k.Lock()
 	defer k.Unlock()
@@ -1762,7 +1796,7 @@ func (k *kataAgent) disconnect() error {
 // check grpc server is serving
 func (k *kataAgent) check() error {
 	span, _ := k.trace("check")
-	defer span.Finish()
+	defer span.End()
 
 	_, err := k.sendReq(&grpc.CheckRequest{})
 	if err != nil {
@@ -1773,7 +1807,7 @@ func (k *kataAgent) check() error {
 
 func (k *kataAgent) waitProcess(c *Container, processID string) (int32, error) {
 	span, _ := k.trace("waitProcess")
-	defer span.Finish()
+	defer span.End()
 
 	resp, err := k.sendReq(&grpc.WaitProcessRequest{
 		ContainerId: c.id,
@@ -1932,12 +1966,24 @@ func (k *kataAgent) getReqContext(reqName string) (ctx context.Context, cancel c
 
 	return ctx, cancel
 }
+func (k *kataAgent) getReqContext2(ctx1 context.Context, reqName string) (ctx context.Context, cancel context.CancelFunc) {
+	switch reqName {
+	case grpcWaitProcessRequest, grpcGetOOMEventRequest:
+		// Wait and GetOOMEvent have no timeout
+	case grpcCheckRequest:
+		ctx, cancel = context.WithTimeout(ctx1, checkRequestTimeout)
+	default:
+		ctx, cancel = context.WithTimeout(ctx1, defaultRequestTimeout)
+	}
+
+	return ctx, cancel
+}
 
 func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
 	start := time.Now()
 	span, _ := k.trace("sendReq")
-	span.SetTag("request", request)
-	defer span.Finish()
+	// span.SetTag("request", request)
+	defer span.End()
 
 	if err := k.connect(); err != nil {
 		return nil, err
@@ -1962,6 +2008,37 @@ func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
 		agentRpcDurationsHistogram.WithLabelValues(msgName).Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
 	}()
 	return handler(ctx, request)
+}
+
+func (k *kataAgent) sendReq2(ctx context.Context, request interface{}) (interface{}, error) {
+	start := time.Now()
+	span, _ := k.trace("sendReq")
+	// span.SetTag("request", request)
+	defer span.End()
+
+	if err := k.connect2(); err != nil {
+		return nil, err
+	}
+	if !k.keepConn {
+		defer k.disconnect()
+	}
+
+	msgName := proto.MessageName(request.(proto.Message))
+	handler := k.reqHandlers[msgName]
+	if msgName == "" || handler == nil {
+		return nil, errors.New("Invalid request type")
+	}
+	message := request.(proto.Message)
+	ctx1, cancel := k.getReqContext2(ctx, msgName)
+	if cancel != nil {
+		defer cancel()
+	}
+	k.Logger().WithField("name", msgName).WithField("req", message.String()).Debug("sending request")
+
+	defer func() {
+		agentRpcDurationsHistogram.WithLabelValues(msgName).Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
+	}()
+	return handler(ctx1, request)
 }
 
 // readStdout and readStderr are special that we cannot differentiate them with the request types...
@@ -2003,8 +2080,8 @@ func (k *kataAgent) readProcessStream(containerID, processID string, data []byte
 	return 0, err
 }
 
-func (k *kataAgent) getGuestDetails(req *grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error) {
-	resp, err := k.sendReq(req)
+func (k *kataAgent) getGuestDetails(ctx context.Context, req *grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error) {
+	resp, err := k.sendReq2(ctx, req)
 	if err != nil {
 		return nil, err
 	}
