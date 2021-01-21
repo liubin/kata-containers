@@ -1569,33 +1569,120 @@ fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
     let bundle_path = Path::new(CONTAINER_BASE).join(cid);
     let config_path = bundle_path.join("config.json");
     let rootfs_path = bundle_path.join("rootfs");
-
     fs::create_dir_all(&rootfs_path)?;
-    BareMount::new(
-        &spec_root.path,
-        rootfs_path.to_str().unwrap(),
-        "bind",
-        MsFlags::MS_BIND,
-        "",
-        &sl!(),
-    )
-    .mount()?;
+
+    let mut root_mounted = false;
+    let key = "io.kata-containers.images";
+    if let Some(images) = spec.annotations.get(key) {
+        info!(sl!(), "AAAAAA images {:?}", images);
+        if let Some(container_name) = get_container_name(spec) {
+            info!(sl!(), "AAAAAA container_name {:?}", container_name);
+
+            // "c1#docker.io/containerstack/alpine-stress:latest"
+            let image_list: Vec<&str> = images.split(',').collect();
+            for image_item in image_list {
+                let image_pair: Vec<&str> = image_item.split('#').collect();
+                if image_pair.len() != 2 || image_pair[0] != container_name {
+                    continue;
+                }
+                let image_name = image_pair[1];
+                info!(
+                    sl!(),
+                    "AAAAAAAA contanier: {:?}, image: {:?}", container_name, image_name
+                );
+
+                // FIXME /var/lib/containers need to be writable
+                let out = Command::new("/bin/buildah")
+                    .arg("from")
+                    .arg("--name")
+                    .arg(container_name)
+                    .arg("--pull")
+                    .arg(image_name)
+                    .output()
+                    .context("failed to pull image")?;
+
+                // FIXME handle error when status != 0
+                info!(sl!(), "AAAAAA status {:?}", out.status);
+                info!(
+                    sl!(),
+                    "AAAAAA buildah stdout {:?}",
+                    String::from_utf8(out.stdout)
+                );
+                info!(
+                    sl!(),
+                    "AAAAAA buildah stderr {:?}",
+                    String::from_utf8(out.stderr)
+                );
+
+                let out = Command::new("/bin/buildah")
+                    .arg("mount")
+                    .arg(container_name)
+                    .output()
+                    .context("failed to mount image")?;
+                let mut image_path = String::from_utf8(out.stdout)?;
+                if image_path.ends_with('\n') {
+                    image_path.pop();
+                }
+
+                // FIXME handle error when status != 0
+                info!(sl!(), "AAAAAA image_path {:?}", out.status);
+                info!(sl!(), "AAAAAA image_path mount path {:?}", &image_path);
+                info!(
+                    sl!(),
+                    "AAAAAA image_path stderr {:?}",
+                    String::from_utf8(out.stderr)
+                );
+
+                BareMount::new(
+                    &image_path,
+                    rootfs_path.to_str().unwrap(),
+                    "bind",
+                    MsFlags::MS_BIND,
+                    "",
+                    &sl!(),
+                )
+                .mount()?;
+                root_mounted = true;
+            }
+        }
+    }
+
+    if !root_mounted {
+        BareMount::new(
+            &spec_root.path,
+            rootfs_path.to_str().unwrap(),
+            "bind",
+            MsFlags::MS_BIND,
+            "",
+            &sl!(),
+        )
+        .mount()?;
+    }
+
     spec.root = Some(Root {
         path: rootfs_path.to_str().unwrap().to_owned(),
         readonly: spec_root.readonly,
     });
 
-    info!(
-        sl!(),
-        "{:?}",
-        spec.process.as_ref().unwrap().console_size.as_ref()
-    );
     let _ = spec.save(config_path.to_str().unwrap());
 
     let olddir = unistd::getcwd().context("cannot getcwd")?;
     unistd::chdir(bundle_path.to_str().unwrap())?;
 
     Ok(olddir)
+}
+
+fn get_container_name(spec: &Spec) -> Option<&str> {
+    for ev in &spec.process.as_ref().unwrap().env {
+        let kv: Vec<&str> = ev.split('=').collect();
+        if kv.len() != 2 {
+            continue;
+        }
+        if kv[0] == "CONTAINER_NAME" {
+            return Some(kv[1]);
+        }
+    }
+    None
 }
 
 fn cleanup_process(p: &mut Process) -> Result<()> {
