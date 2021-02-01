@@ -4,7 +4,9 @@
 //
 
 use async_trait::async_trait;
-use rustjail::{pipestream::PipeStream, process::StreamType};
+use nix::mount::{MntFlags, MsFlags};
+use rustjail::{mount::umount2, pipestream::PipeStream, process::StreamType};
+
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf};
 use tokio::sync::Mutex;
 
@@ -35,7 +37,6 @@ use rustjail::process::Process;
 use rustjail::specconv::CreateOpts;
 
 use nix::errno::Errno;
-use nix::mount::MsFlags;
 use nix::sys::signal::Signal;
 use nix::sys::stat;
 use nix::unistd::{self, Pid};
@@ -1578,6 +1579,9 @@ fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
         if let Some(container_name) = get_container_name(spec) {
             info!(sl!(), "AAAAAA container_name {:?}", container_name);
 
+            let token = get_token(spec);
+            info!(sl!(), "AAAAAA token {:?}", token);
+
             // "c1#docker.io/containerstack/alpine-stress:latest"
             let image_list: Vec<&str> = images.split(',').collect();
             for image_item in image_list {
@@ -1592,6 +1596,7 @@ fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
                 );
 
                 // FIXME /var/lib/containers need to be writable
+                // FIXME set user/password
                 let out = Command::new("/bin/buildah")
                     .arg("from")
                     .arg("--name")
@@ -1670,6 +1675,74 @@ fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
     unistd::chdir(bundle_path.to_str().unwrap())?;
 
     Ok(olddir)
+}
+
+fn get_token(spec: &Spec) -> Result<String> {
+    let key = "io.kata-containers.images.pull-secret";
+    let secret = spec.annotations.get(key);
+    if secret.is_none() {
+        return Ok(String::new());
+    }
+
+    let secret = secret.unwrap();
+    let secret_pair: Vec<&str> = secret.split('/').collect();
+    let mut secret_namespace = "default";
+    let secret_name;
+    match secret_pair.len() {
+        1 => {
+            // namespace set to default
+            secret_name = secret_pair[0];
+        }
+        2 => {
+            secret_namespace = secret_pair[0];
+            secret_name = secret_pair[1];
+        }
+        _ => return Err(anyhow!("invalid image pull secret format {}", secret)),
+    }
+
+    let dst = "/var/run/secrets/kubernetes.io/serviceaccount";
+    let mut src = String::new();
+    for m in &spec.mounts {
+        if m.destination == dst {
+            src = m.source.clone();
+            break;
+        }
+    }
+    info!(sl!(), "AAAAAA get_token src {:?}", &src);
+    let _ = fs::create_dir_all(dst);
+
+    BareMount::new(&src, dst, "bind", MsFlags::MS_BIND, "", &sl!()).mount()?;
+
+    let mut cmd = Command::new("/bin/regcred");
+    cmd.arg(secret_namespace).arg(secret_name);
+
+    for ev in &spec.process.as_ref().unwrap().env {
+        let kv: Vec<&str> = ev.split('=').collect();
+        if kv.len() != 2 {
+            continue;
+        }
+        if kv[0].starts_with("KUBERNETES_") {
+            cmd.env(kv[0], kv[1]);
+        }
+    }
+
+    let out = cmd.output().context("failed to get secret")?;
+
+    info!(sl!(), "AAAAAA regcred status {:?}", out.status);
+    info!(sl!(), "AAAAAA regcred stdout {:?}", out.stdout);
+    info!(
+        sl!(),
+        "AAAAAA regcred stderr {:?}",
+        String::from_utf8(out.stderr)
+    );
+
+    umount2(dst, MntFlags::MNT_DETACH)?;
+
+    if out.status.success() {
+        Ok(String::from_utf8(out.stdout)?)
+    } else {
+        Err(anyhow!(out.status))
+    }
 }
 
 fn get_container_name(spec: &Spec) -> Option<&str> {
