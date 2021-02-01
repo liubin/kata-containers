@@ -80,21 +80,21 @@ var defaultMaxQemuVCPUs = MaxQemuVCPUs()
 // agnostic list of kernel root parameters for NVDIMM
 var commonNvdimmKernelRootParams = []Param{ //nolint: unused, deadcode, varcheck
 	{"root", "/dev/pmem0p1"},
-	{"rootflags", "dax,data=ordered,errors=remount-ro ro"},
+	{"rootflags", "dax,data=ordered,errors=remount-ro rw"},
 	{"rootfstype", "ext4"},
 }
 
 // agnostic list of kernel root parameters for NVDIMM
 var commonNvdimmNoDAXKernelRootParams = []Param{ //nolint: unused, deadcode, varcheck
 	{"root", "/dev/pmem0p1"},
-	{"rootflags", "data=ordered,errors=remount-ro ro"},
+	{"rootflags", "data=ordered,errors=remount-ro rw"},
 	{"rootfstype", "ext4"},
 }
 
 // agnostic list of kernel root parameters for virtio-blk
 var commonVirtioblkKernelRootParams = []Param{ //nolint: unused, deadcode, varcheck
 	{"root", "/dev/vda1"},
-	{"rootflags", "data=ordered,errors=remount-ro ro"},
+	{"rootflags", "data=ordered,errors=remount-ro rw"},
 	{"rootfstype", "ext4"},
 }
 
