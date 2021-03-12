@@ -20,7 +20,11 @@ import (
 
 	"github.com/mdlayher/vsock"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel"
+	otelLabel "go.opentelemetry.io/otel/label"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	grpcStatus "google.golang.org/grpc/status"
 
 	"github.com/containerd/ttrpc"
@@ -76,32 +80,8 @@ func NewAgentClient(ctx context.Context, sock string) (*AgentClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	/*
-		dialOpts := []grpc.DialOption{grpc.WithInsecure(), grpc.WithBlock()}
-		dialOpts = append(dialOpts, grpc.WithDialer(agentDialer(parsedAddr, enableYamux)))
 
-		var tracer opentracing.Tracer
-
-		span := opentracing.SpanFromContext(ctx)
-
-		// If the context contains a trace span, trace all client comms
-		if span != nil {
-			tracer = span.Tracer()
-
-			dialOpts = append(dialOpts,
-				grpc.WithUnaryInterceptor(otgrpc.OpenTracingClientInterceptor(tracer)))
-			dialOpts = append(dialOpts,
-				grpc.WithStreamInterceptor(otgrpc.OpenTracingStreamClientInterceptor(tracer)))
-		}
-
-		ctx, cancel := context.WithTimeout(ctx, defaultDialTimeout)
-		defer cancel()
-		conn, err := grpc.DialContext(ctx, grpcAddr, dialOpts...)
-		if err != nil {
-			return nil, err
-		}
-	*/
-	client := ttrpc.NewClient(conn)
+	client := ttrpc.NewClient(conn, ttrpc.WithUnaryClientInterceptor(TraceUnaryClientInterceptor()))
 
 	return &AgentClient{
 		AgentServiceClient: agentgrpc.NewAgentServiceClient(client),
@@ -113,6 +93,72 @@ func NewAgentClient(ctx context.Context, sock string) (*AgentClient, error) {
 // Close an existing connection to the agent gRPC server.
 func (c *AgentClient) Close() error {
 	return c.conn.Close()
+}
+
+func TraceUnaryClientInterceptor() ttrpc.UnaryClientInterceptor {
+	return func(
+		ctx context.Context,
+		req *ttrpc.Request,
+		resp *ttrpc.Response,
+		ci *ttrpc.UnaryClientInfo,
+		invoker ttrpc.Invoker,
+	) error {
+		requestMetadata, ok := ttrpc.GetMetadata(ctx)
+		if !ok {
+			requestMetadata = make(ttrpc.MD)
+		}
+
+		tracer := otel.Tracer("kata")
+		var span trace.Span
+		ctx, span = tracer.Start(
+			ctx,
+			fmt.Sprintf("ttrpc.%s", req.Method),
+			trace.WithSpanKind(trace.SpanKindClient),
+		)
+		defer span.End()
+
+		inject(ctx, &requestMetadata)
+		ctx = ttrpc.WithMetadata(ctx, requestMetadata)
+
+		setRequest(req, &requestMetadata)
+		err := invoker(ctx, req, resp)
+
+		if err != nil {
+			span.SetAttributes(otelLabel.Key("RPC_ERROR").Bool(true))
+		}
+		// err can be nil, that will return an OK response code
+		if status, _ := status.FromError(err); status != nil {
+			span.SetAttributes(otelLabel.Key("RPC_CODE").Uint((uint)(status.Code())))
+			span.SetAttributes(otelLabel.Key("RPC_MESSAGE").String(status.Message()))
+		}
+
+		return err
+	}
+}
+
+func inject(ctx context.Context, metadata *ttrpc.MD) {
+}
+
+func setRequest(req *ttrpc.Request, md *ttrpc.MD) {
+	newMD := make([]*ttrpc.KeyValue, 0)
+	for _, kv := range req.Metadata {
+		// not found in md, means that we can copy old kv
+		// otherwise, we will use the values in md to overwrite it
+		if _, found := md.Get(kv.Key); !found {
+			newMD = append(newMD, kv)
+		}
+	}
+
+	req.Metadata = newMD
+
+	for k, values := range *md {
+		for _, v := range values {
+			req.Metadata = append(req.Metadata, &ttrpc.KeyValue{
+				Key:   k,
+				Value: v,
+			})
+		}
+	}
 }
 
 // vsock scheme is self-defined to be kept from being parsed by grpc.
