@@ -2014,15 +2014,15 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	}
 }
 
-func (k *kataAgent) getReqContext(reqName string) (ctx context.Context, cancel context.CancelFunc) {
-	ctx = context.Background()
+func (k *kataAgent) getReqContext(ctx1 context.Context, reqName string) (ctx context.Context, cancel context.CancelFunc) {
+	ctx = ctx1
 	switch reqName {
 	case grpcWaitProcessRequest, grpcGetOOMEventRequest:
 		// Wait and GetOOMEvent have no timeout
 	case grpcCheckRequest:
-		ctx, cancel = context.WithTimeout(ctx, checkRequestTimeout)
+		ctx, cancel = context.WithTimeout(ctx1, checkRequestTimeout)
 	default:
-		ctx, cancel = context.WithTimeout(ctx, defaultRequestTimeout)
+		ctx, cancel = context.WithTimeout(ctx1, defaultRequestTimeout)
 	}
 
 	return ctx, cancel
@@ -2044,7 +2044,7 @@ func (k *kataAgent) sendReq(spanCtx context.Context, request interface{}) (inter
 		return nil, errors.New("Invalid request type")
 	}
 	message := request.(proto.Message)
-	ctx, cancel := k.getReqContext(msgName)
+	ctx, cancel := k.getReqContext(spanCtx, msgName)
 	if cancel != nil {
 		defer cancel()
 	}
