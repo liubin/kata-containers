@@ -5,8 +5,7 @@ go 1.14
 require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/blang/semver v0.0.0-20190414102917-ba2c2ddd8906
-	github.com/cilium/ebpf v0.0.0-20200421083123-d05ecd062fb1 // indirect
-	github.com/containerd/cgroups v0.0.0-20190717030353-c4b9ac5c7601
+	github.com/containerd/cgroups v1.0.1
 	github.com/containerd/console v0.0.0-20191206165004-02ecf6a7291e
 	github.com/containerd/containerd v1.2.1-0.20181210191522-f05672357f56
 	github.com/containerd/continuity v0.0.0-20200413184840-d3ef23f19fbb // indirect
@@ -17,6 +16,7 @@ require (
 	github.com/containerd/ttrpc v1.0.0
 	github.com/containerd/typeurl v1.0.1-0.20190228175220-2a93cfde8c20
 	github.com/containernetworking/plugins v0.8.2
+	github.com/coreos/go-systemd/v22 v22.3.1 // indirect
 	github.com/cri-o/cri-o v1.0.0-rc2.0.20170928185954-3394b3b2d6af
 	github.com/dlespiau/covertool v0.0.0-20180314162135-b0c4c6d0583a
 	github.com/docker/distribution v2.7.1+incompatible // indirect
@@ -29,13 +29,13 @@ require (
 	github.com/go-openapi/swag v0.18.0
 	github.com/go-openapi/validate v0.18.0
 	github.com/gogo/googleapis v1.4.0 // indirect
-	github.com/gogo/protobuf v1.3.1
+	github.com/gogo/protobuf v1.3.2
 	github.com/hashicorp/go-multierror v1.0.0
 	github.com/kata-containers/govmm v0.0.0-20210428163604-f0e9a35308ee
 	github.com/mdlayher/vsock v0.0.0-20191108225356-d9c65923cb8f
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/opencontainers/runc v1.0.0-rc9.0.20200102164712-2b52db75279c
-	github.com/opencontainers/runtime-spec v1.0.2-0.20190408193819-a1b50f621a48
+	github.com/opencontainers/runtime-spec v1.0.2
 	github.com/opencontainers/selinux v1.4.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.7.1
@@ -44,19 +44,19 @@ require (
 	github.com/prometheus/procfs v0.1.3
 	github.com/safchain/ethtool v0.0.0-20190326074333-42ed695e3de8
 	github.com/seccomp/libseccomp-golang v0.9.1 // indirect
-	github.com/sirupsen/logrus v1.4.2
+	github.com/sirupsen/logrus v1.7.0
 	github.com/smartystreets/goconvey v1.6.4 // indirect
 	github.com/stretchr/testify v1.6.1
 	github.com/syndtr/gocapability v0.0.0-20180916011248-d98352740cb2 // indirect
-	github.com/urfave/cli v1.20.1-0.20170926034118-ac249472b7de
+	github.com/urfave/cli v1.22.2
 	github.com/vishvananda/netlink v1.0.1-0.20190604022042-c8c507c80ea2
 	github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc
 	go.opentelemetry.io/otel v0.15.0
 	go.opentelemetry.io/otel/exporters/trace/jaeger v0.15.0
 	go.opentelemetry.io/otel/sdk v0.15.0
-	golang.org/x/net v0.0.0-20200822124328-c89045814202
+	golang.org/x/net v0.0.0-20201021035429-f5854403a974
 	golang.org/x/oauth2 v0.0.0-20200902213428-5d25da1a8d43
-	golang.org/x/sys v0.0.0-20200905004654-be1d3432aa8f
+	golang.org/x/sys v0.0.0-20210507161434-a76c4d0a0096
 	google.golang.org/grpc v1.31.1
 	gotest.tools v2.2.0+incompatible // indirect
 	k8s.io/apimachinery v0.18.2

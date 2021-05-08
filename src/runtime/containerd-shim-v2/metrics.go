@@ -8,7 +8,7 @@ package containerdshim
 import (
 	"context"
 
-	"github.com/containerd/cgroups"
+	cgroupsStats "github.com/containerd/cgroups/stats/v1"
 	"github.com/containerd/typeurl"
 
 	google_protobuf "github.com/gogo/protobuf/types"
@@ -31,11 +31,11 @@ func marshalMetrics(ctx context.Context, s *service, containerID string) (*googl
 	return data, nil
 }
 
-func statsToMetrics(stats *vc.ContainerStats) *cgroups.Metrics {
-	metrics := &cgroups.Metrics{}
+func statsToMetrics(stats *vc.ContainerStats) *cgroupsStats.Metrics {
+	metrics := &cgroupsStats.Metrics{}
 
 	if stats.CgroupStats != nil {
-		metrics = &cgroups.Metrics{
+		metrics = &cgroupsStats.Metrics{
 			Hugetlb: setHugetlbStats(stats.CgroupStats.HugetlbStats),
 			Pids:    setPidsStats(stats.CgroupStats.PidsStats),
 			CPU:     setCPUStats(stats.CgroupStats.CPUStats),
@@ -49,12 +49,12 @@ func statsToMetrics(stats *vc.ContainerStats) *cgroups.Metrics {
 	return metrics
 }
 
-func setHugetlbStats(vcHugetlb map[string]vc.HugetlbStats) []*cgroups.HugetlbStat {
-	var hugetlbStats []*cgroups.HugetlbStat
+func setHugetlbStats(vcHugetlb map[string]vc.HugetlbStats) []*cgroupsStats.HugetlbStat {
+	var hugetlbStats []*cgroupsStats.HugetlbStat
 	for _, v := range vcHugetlb {
 		hugetlbStats = append(
 			hugetlbStats,
-			&cgroups.HugetlbStat{
+			&cgroupsStats.HugetlbStat{
 				Usage:   v.Usage,
 				Max:     v.MaxUsage,
 				Failcnt: v.Failcnt,
@@ -64,8 +64,8 @@ func setHugetlbStats(vcHugetlb map[string]vc.HugetlbStats) []*cgroups.HugetlbSta
 	return hugetlbStats
 }
 
-func setPidsStats(vcPids vc.PidsStats) *cgroups.PidsStat {
-	pidsStats := &cgroups.PidsStat{
+func setPidsStats(vcPids vc.PidsStats) *cgroupsStats.PidsStat {
+	pidsStats := &cgroupsStats.PidsStat{
 		Current: vcPids.Current,
 		Limit:   vcPids.Limit,
 	}
@@ -73,19 +73,19 @@ func setPidsStats(vcPids vc.PidsStats) *cgroups.PidsStat {
 	return pidsStats
 }
 
-func setCPUStats(vcCPU vc.CPUStats) *cgroups.CPUStat {
+func setCPUStats(vcCPU vc.CPUStats) *cgroupsStats.CPUStat {
 
 	var perCPU []uint64
 	perCPU = append(perCPU, vcCPU.CPUUsage.PercpuUsage...)
 
-	cpuStats := &cgroups.CPUStat{
-		Usage: &cgroups.CPUUsage{
+	cpuStats := &cgroupsStats.CPUStat{
+		Usage: &cgroupsStats.CPUUsage{
 			Total:  vcCPU.CPUUsage.TotalUsage,
 			Kernel: vcCPU.CPUUsage.UsageInKernelmode,
 			User:   vcCPU.CPUUsage.UsageInUsermode,
 			PerCPU: perCPU,
 		},
-		Throttling: &cgroups.Throttle{
+		Throttling: &cgroupsStats.Throttle{
 			Periods:          vcCPU.ThrottlingData.Periods,
 			ThrottledPeriods: vcCPU.ThrottlingData.ThrottledPeriods,
 			ThrottledTime:    vcCPU.ThrottlingData.ThrottledTime,
@@ -95,27 +95,27 @@ func setCPUStats(vcCPU vc.CPUStats) *cgroups.CPUStat {
 	return cpuStats
 }
 
-func setMemoryStats(vcMemory vc.MemoryStats) *cgroups.MemoryStat {
-	memoryStats := &cgroups.MemoryStat{
-		Usage: &cgroups.MemoryEntry{
+func setMemoryStats(vcMemory vc.MemoryStats) *cgroupsStats.MemoryStat {
+	memoryStats := &cgroupsStats.MemoryStat{
+		Usage: &cgroupsStats.MemoryEntry{
 			Limit:   vcMemory.Usage.Limit,
 			Usage:   vcMemory.Usage.Usage,
 			Max:     vcMemory.Usage.MaxUsage,
 			Failcnt: vcMemory.Usage.Failcnt,
 		},
-		Swap: &cgroups.MemoryEntry{
+		Swap: &cgroupsStats.MemoryEntry{
 			Limit:   vcMemory.SwapUsage.Limit,
 			Usage:   vcMemory.SwapUsage.Usage,
 			Max:     vcMemory.SwapUsage.MaxUsage,
 			Failcnt: vcMemory.SwapUsage.Failcnt,
 		},
-		Kernel: &cgroups.MemoryEntry{
+		Kernel: &cgroupsStats.MemoryEntry{
 			Limit:   vcMemory.KernelUsage.Limit,
 			Usage:   vcMemory.KernelUsage.Usage,
 			Max:     vcMemory.KernelUsage.MaxUsage,
 			Failcnt: vcMemory.KernelUsage.Failcnt,
 		},
-		KernelTCP: &cgroups.MemoryEntry{
+		KernelTCP: &cgroupsStats.MemoryEntry{
 			Limit:   vcMemory.KernelTCPUsage.Limit,
 			Usage:   vcMemory.KernelTCPUsage.Usage,
 			Max:     vcMemory.KernelTCPUsage.MaxUsage,
@@ -145,8 +145,8 @@ func setMemoryStats(vcMemory vc.MemoryStats) *cgroups.MemoryStat {
 	return memoryStats
 }
 
-func setBlkioStats(vcBlkio vc.BlkioStats) *cgroups.BlkIOStat {
-	blkioStats := &cgroups.BlkIOStat{
+func setBlkioStats(vcBlkio vc.BlkioStats) *cgroupsStats.BlkIOStat {
+	blkioStats := &cgroupsStats.BlkIOStat{
 		IoServiceBytesRecursive: copyBlkio(vcBlkio.IoServiceBytesRecursive),
 		IoServicedRecursive:     copyBlkio(vcBlkio.IoServicedRecursive),
 		IoQueuedRecursive:       copyBlkio(vcBlkio.IoQueuedRecursive),
@@ -160,10 +160,10 @@ func setBlkioStats(vcBlkio vc.BlkioStats) *cgroups.BlkIOStat {
 	return blkioStats
 }
 
-func copyBlkio(s []vc.BlkioStatEntry) []*cgroups.BlkIOEntry {
-	ret := make([]*cgroups.BlkIOEntry, len(s))
+func copyBlkio(s []vc.BlkioStatEntry) []*cgroupsStats.BlkIOEntry {
+	ret := make([]*cgroupsStats.BlkIOEntry, len(s))
 	for i, v := range s {
-		ret[i] = &cgroups.BlkIOEntry{
+		ret[i] = &cgroupsStats.BlkIOEntry{
 			Op:    v.Op,
 			Major: v.Major,
 			Minor: v.Minor,
@@ -174,10 +174,10 @@ func copyBlkio(s []vc.BlkioStatEntry) []*cgroups.BlkIOEntry {
 	return ret
 }
 
-func setNetworkStats(vcNetwork []*vc.NetworkStats) []*cgroups.NetworkStat {
-	networkStats := make([]*cgroups.NetworkStat, len(vcNetwork))
+func setNetworkStats(vcNetwork []*vc.NetworkStats) []*cgroupsStats.NetworkStat {
+	networkStats := make([]*cgroupsStats.NetworkStat, len(vcNetwork))
 	for i, v := range vcNetwork {
-		networkStats[i] = &cgroups.NetworkStat{
+		networkStats[i] = &cgroupsStats.NetworkStat{
 			Name:      v.Name,
 			RxBytes:   v.RxBytes,
 			RxPackets: v.RxPackets,
