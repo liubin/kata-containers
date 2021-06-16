@@ -70,6 +70,11 @@ use tokio::{
     task::JoinHandle,
 };
 
+use opentelemetry::global;
+use std::collections::HashMap;
+use tracing_futures::Instrument;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
+
 mod rpc;
 mod tracer;
 
@@ -206,7 +211,17 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         let _ = tracer::setup_tracing(NAME, &logger, &config)?;
     }
 
-    let root = span!(tracing::Level::TRACE, "root-span", work_units = 2);
+    let root = span!(tracing::Level::INFO, "root-span");
+    if !config.traceparent.is_empty() {
+        // extract parent span from kernel parameter agent.traceparent
+        let mut extractor = HashMap::new();
+        extractor.insert(String::from("traceparent"), config.traceparent.clone());
+
+        let parent_context =
+            global::get_text_map_propagator(|propagator| propagator.extract(&extractor));
+
+        root.set_parent(parent_context);
+    }
 
     // XXX: Start the root trace transaction.
     //
@@ -240,6 +255,10 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             return Err(anyhow!(e).into());
         }
     }
+
+    // drop span to force flush it.
+    drop(_enter);
+    drop(root);
 
     if config.tracing != tracer::TraceType::Disabled {
         tracer::end_tracing();
@@ -314,7 +333,10 @@ async fn start_sandbox(
 
     tasks.push(signal_handler_task);
 
-    let uevents_handler_task = tokio::spawn(watch_uevents(sandbox.clone(), shutdown.clone()));
+    let uevents_handler_task = tokio::spawn(
+        watch_uevents(sandbox.clone(), shutdown.clone())
+            .instrument(tracing::info_span!("watch_uevents")),
+    );
 
     tasks.push(uevents_handler_task);
 

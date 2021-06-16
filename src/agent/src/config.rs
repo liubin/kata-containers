@@ -14,6 +14,7 @@ const DEV_MODE_FLAG: &str = "agent.devmode";
 const TRACE_MODE_OPTION: &str = "agent.trace";
 const LOG_LEVEL_OPTION: &str = "agent.log";
 const SERVER_ADDR_OPTION: &str = "agent.server_addr";
+const TRACEPARENT: &str = "agent.traceparent";
 const HOTPLUG_TIMOUT_OPTION: &str = "agent.hotplug_timeout";
 const DEBUG_CONSOLE_VPORT_OPTION: &str = "agent.debug_console_vport";
 const LOG_VPORT_OPTION: &str = "agent.log_vport";
@@ -59,6 +60,7 @@ pub struct AgentConfig {
     pub server_addr: String,
     pub unified_cgroup_hierarchy: bool,
     pub tracing: tracer::TraceType,
+    pub traceparent: String,
 }
 
 // parse_cmdline_param parse commandline parameters.
@@ -102,6 +104,7 @@ impl AgentConfig {
             log_vport: 0,
             container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
             server_addr: format!("{}:{}", VSOCK_ADDR, VSOCK_PORT),
+            traceparent: String::new(),
             unified_cgroup_hierarchy: false,
             tracing: tracer::TraceType::Disabled,
         }
@@ -133,6 +136,7 @@ impl AgentConfig {
                 self.server_addr,
                 get_string_value
             );
+            parse_cmdline_param!(param, TRACEPARENT, self.traceparent, get_string_value);
 
             // ensure the timeout is a positive value
             parse_cmdline_param!(

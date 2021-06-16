@@ -106,6 +106,8 @@ type qemu struct {
 	memoryDumpFlag sync.Mutex
 
 	virtiofsd Virtiofsd
+
+	traceparentID string
 }
 
 const (
@@ -124,6 +126,8 @@ const (
 	fallbackFileBackedMemDir = "/dev/shm"
 
 	qemuStopSandboxTimeoutSecs = 15
+
+	agentTraceParent = "agent.traceparent"
 )
 
 // agnostic list of kernel parameters
@@ -177,6 +181,9 @@ func (q *qemu) kernelParameters() string {
 	// params are added here, they will take priority over the defaults.
 	params = append(params, q.config.KernelParams...)
 
+	if q.traceparentID != "" {
+		params = append(params, Param{agentTraceParent, q.traceparentID})
+	}
 	paramsStr := SerializeParams(params, "=")
 
 	return strings.Join(paramsStr, " ")
@@ -743,6 +750,10 @@ func (q *qemu) setupVirtioMem() error {
 func (q *qemu) startSandbox(ctx context.Context, timeout int) error {
 	span, ctx := q.trace(ctx, "startSandbox")
 	defer span.End()
+
+	// get parent trace and add it as a kernel parameter.
+	q.traceparentID = traceParent(span)
+	q.qemuConfig.Kernel.Params = q.kernelParameters()
 
 	if q.config.Debug {
 		params := q.arch.kernelParameters(q.config.Debug)
